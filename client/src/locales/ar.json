@@ -1,0 +1,194 @@
+{
+  "common": {
+    "appName": "فرز المرشحين بالذكاء الاصطناعي",
+    "unknownDate": "تاريخ غير معروف",
+    "justNow": "الآن",
+    "score": "الدرجة {{score}}",
+    "notAvailable": "غير متاح",
+    "roles": {
+      "admin": "مسؤول",
+      "candidate": "مرشح"
+    },
+    "actions": {
+      "close": "إغلاق",
+      "delete": "حذف",
+      "preview": "معاينة",
+      "open": "فتح",
+      "send": "إرسال"
+    }
+  },
+  "language": {
+    "label": "اللغة",
+    "english": "الإنجليزية",
+    "french": "الفرنسية",
+    "arabic": "العربية"
+  },
+  "theme": {
+    "switchToDark": "التبديل إلى الوضع الداكن",
+    "switchToLight": "التبديل إلى الوضع الفاتح"
+  },
+  "header": {
+    "adminTitle": "فرز المرشحين بالذكاء الاصطناعي",
+    "candidateTitle": "بوابة المرشح",
+    "logout": "تسجيل الخروج"
+  },
+  "auth": {
+    "titles": {
+      "login": "مرحباً بعودتك",
+      "register": "إنشاء حساب"
+    },
+    "tabs": {
+      "login": "تسجيل الدخول",
+      "register": "تسجيل"
+    },
+    "fields": {
+      "name": "الاسم",
+      "email": "البريد الإلكتروني",
+      "password": "كلمة المرور",
+      "role": "الدور"
+    },
+    "buttons": {
+      "login": "تسجيل الدخول",
+      "register": "تسجيل"
+    },
+    "states": {
+      "pleaseWait": "يرجى الانتظار..."
+    },
+    "errors": {
+      "authentication": "تعذر إكمال المصادقة"
+    }
+  },
+  "candidatePortal": {
+    "submitTitle": "إرسال السيرة الذاتية",
+    "submitDescription": "ارفع سيرتك الذاتية بصيغة PDF أو الصق النص لإنشاء ملفك.",
+    "resumeText": "نص السيرة الذاتية",
+    "resumePlaceholder": "Jane Doe\nمهندسة برمجيات أولى\nTypeScript, React, Node.js...",
+    "analyzeResume": "تحليل السيرة الذاتية",
+    "analyzing": "جار التحليل...",
+    "dividerOr": "أو",
+    "pdfResume": "سيرة ذاتية PDF",
+    "browseFiles": "تصفح الملفات",
+    "selectedFile": "الملف المحدد: {{fileName}}",
+    "noFileSelected": "لم يتم اختيار ملف",
+    "uploadAnalyzePdf": "رفع وتحليل PDF",
+    "uploadingPdf": "جار رفع PDF...",
+    "profileTitle": "ملفك الشخصي",
+    "emptyProfile": "أرسل سيرتك الذاتية لإنشاء ملف مرشح منظم.",
+    "analyzedProfile": "الملف المحلل",
+    "noSummary": "لا يوجد ملخص.",
+    "noSkills": "لم يتم استخراج مهارات.",
+    "openUploadedPdf": "فتح ملف PDF المرفوع",
+    "contactAdmin": "التواصل مع المسؤول / الدعم",
+    "deleteProfile": "حذف ملف السيرة الذاتية",
+    "deleting": "جار الحذف..."
+  },
+  "adminDashboard": {
+    "processedCandidates": "المرشحون المعالجون",
+    "candidateCount": "{{visible}} من {{total}} مرشحاً",
+    "searchLabel": "البحث عن المرشحين",
+    "searchPlaceholder": "ابحث بالاسم أو المهارة",
+    "sortLabel": "ترتيب المرشحين",
+    "sortOptions": {
+      "newestFirst": "الأحدث أولاً",
+      "highestScore": "أعلى درجة",
+      "lowestScore": "أقل درجة"
+    },
+    "exportCandidates": "تصدير المرشحين",
+    "noCandidatesFound": "لم يتم العثور على مرشحين",
+    "emptyNoCandidates": "حلل سيرة ذاتية لإنشاء أول بطاقة مرشح.",
+    "emptySearch": "جرب اسماً أو مهارة أخرى.",
+    "noSummary": "لا يوجد ملخص.",
+    "filterBySkill": "تصفية حسب {{skill}}",
+    "rolesProjects": "{{roles}} أدوار / {{projects}} مشاريع",
+    "viewProfile": "عرض الملف",
+    "messageCandidate": "مراسلة المرشح",
+    "previewPdf": "معاينة PDF",
+    "deleteCandidate": "حذف المرشح",
+    "deleting": "جار الحذف...",
+    "profileNotLinked": "هذا الملف غير مرتبط بحساب مرشح",
+    "candidateLinkedIn": "ملف LinkedIn الخاص بـ {{name}}",
+    "candidateGitHub": "ملف GitHub الخاص بـ {{name}}",
+    "previewCandidatePdf": "معاينة سيرة {{name}} بصيغة PDF",
+    "deleteCandidateLabel": "حذف {{name}}"
+  },
+  "candidateProfile": {
+    "contact": "التواصل",
+    "summary": "الملخص",
+    "skills": "المهارات",
+    "workExperience": "الخبرة العملية",
+    "projects": "المشاريع",
+    "noSummary": "لا يوجد ملخص.",
+    "noSkills": "لم يتم استخراج مهارات.",
+    "noWorkExperience": "لم يتم استخراج خبرة عملية.",
+    "noProjects": "لم يتم استخراج مشاريع.",
+    "messageCandidate": "مراسلة المرشح",
+    "profileNotLinked": "هذا الملف غير مرتبط بحساب مرشح",
+    "closeProfile": "إغلاق الملف",
+    "openLinkedIn": "فتح ملف LinkedIn",
+    "openGitHub": "فتح ملف GitHub"
+  },
+  "pdfPreview": {
+    "title": "السيرة الذاتية PDF",
+    "openNewTab": "فتح في تبويب جديد",
+    "close": "إغلاق معاينة PDF",
+    "iframeTitle": "معاينة السيرة الذاتية PDF"
+  },
+  "chat": {
+    "liveChat": "محادثة مباشرة",
+    "close": "إغلاق المحادثة",
+    "noMessages": "لا توجد رسائل بعد",
+    "startConversation": "ابدأ المحادثة أدناه.",
+    "recipientUnavailable": "لا يوجد مستلم متاح لهذا الملف.",
+    "messageLabel": "رسالة",
+    "placeholder": "اكتب رسالة...",
+    "send": "إرسال",
+    "sending": "جار الإرسال...",
+    "you": "أنت",
+    "admin": "المسؤول",
+    "seen": "تمت المشاهدة",
+    "sent": "تم الإرسال",
+    "errors": {
+      "load": "تعذر تحميل الرسائل. يرجى المحاولة مرة أخرى.",
+      "send": "تعذر إرسال الرسالة. يرجى المحاولة مرة أخرى."
+    }
+  },
+  "notifications": {
+    "label": "الإشعارات",
+    "labelWithCount": "الإشعارات، {{count}} غير مقروءة",
+    "title": "الإشعارات",
+    "unread": "{{count}} غير مقروءة",
+    "markAsRead": "تحديد الكل كمقروء",
+    "marking": "جار التحديد...",
+    "none": "لا توجد إشعارات غير مقروءة.",
+    "types": {
+      "candidate_application": "طلب مرشح جديد",
+      "message": "رسالة جديدة"
+    },
+    "errors": {
+      "load": "تعذر تحميل الإشعارات.",
+      "markAll": "تعذر تحديد الإشعارات كمقروءة.",
+      "markOne": "تعذر تحديد الإشعار كمقروء."
+    }
+  },
+  "status": {
+    "unableOpenChat": "تعذر فتح المحادثة لهذا الإشعار.",
+    "unableLoadCandidates": "تعذر تحميل المرشحين. تأكد من أن الخادم يعمل.",
+    "pasteResumeText": "الصق نص السيرة الذاتية قبل التحليل.",
+    "authRequired": "المصادقة مطلوبة.",
+    "candidateProfileAnalyzed": "تم تحليل ملف سيرتك الذاتية بنجاح.",
+    "adminCandidateAdded": "تمت إضافة {{name}} إلى قائمة المرشحين.",
+    "unableAnalyze": "تعذر تحليل السيرة الذاتية. تحقق من الخلفية وحاول مرة أخرى.",
+    "candidatePdfUploaded": "تم رفع وتحليل سيرتك الذاتية PDF بنجاح.",
+    "adminCandidatePdfAdded": "تمت إضافة {{name}} من سيرة PDF.",
+    "unableUploadPdf": "تعذر رفع PDF. تحقق من الخلفية وحاول مرة أخرى.",
+    "signInDelete": "سجل الدخول قبل حذف مرشح.",
+    "candidateProfileDeleted": "تم حذف ملف سيرتك الذاتية.",
+    "adminCandidateDeleted": "تم حذف {{name}}.",
+    "unableDelete": "تعذر حذف المرشح. تحقق من الخلفية وحاول مرة أخرى."
+  },
+  "app": {
+    "candidateConversation": "محادثة المرشح",
+    "messageCandidateTitle": "مراسلة {{name}}",
+    "contactAdminTitle": "التواصل مع المسؤول / الدعم"
+  }
+}

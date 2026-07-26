@@ -1,0 +1,194 @@
+{
+  "common": {
+    "appName": "AI Candidate Screener",
+    "unknownDate": "Unknown date",
+    "justNow": "Just now",
+    "score": "Score {{score}}",
+    "notAvailable": "N/A",
+    "roles": {
+      "admin": "Admin",
+      "candidate": "Candidate"
+    },
+    "actions": {
+      "close": "Close",
+      "delete": "Delete",
+      "preview": "Preview",
+      "open": "Open",
+      "send": "Send"
+    }
+  },
+  "language": {
+    "label": "Language",
+    "english": "English",
+    "french": "French",
+    "arabic": "Arabic"
+  },
+  "theme": {
+    "switchToDark": "Switch to dark mode",
+    "switchToLight": "Switch to light mode"
+  },
+  "header": {
+    "adminTitle": "AI Candidate Screener",
+    "candidateTitle": "Candidate Portal",
+    "logout": "Logout"
+  },
+  "auth": {
+    "titles": {
+      "login": "Welcome back",
+      "register": "Create an account"
+    },
+    "tabs": {
+      "login": "Login",
+      "register": "Register"
+    },
+    "fields": {
+      "name": "Name",
+      "email": "Email",
+      "password": "Password",
+      "role": "Role"
+    },
+    "buttons": {
+      "login": "Login",
+      "register": "Register"
+    },
+    "states": {
+      "pleaseWait": "Please wait..."
+    },
+    "errors": {
+      "authentication": "Unable to complete authentication"
+    }
+  },
+  "candidatePortal": {
+    "submitTitle": "Submit Resume",
+    "submitDescription": "Upload your PDF resume or paste the text to generate your profile.",
+    "resumeText": "Resume text",
+    "resumePlaceholder": "Jane Doe\nSenior Software Engineer\nTypeScript, React, Node.js...",
+    "analyzeResume": "Analyze Resume",
+    "analyzing": "Analyzing...",
+    "dividerOr": "or",
+    "pdfResume": "PDF resume",
+    "browseFiles": "Browse files",
+    "selectedFile": "Selected file: {{fileName}}",
+    "noFileSelected": "No file selected",
+    "uploadAnalyzePdf": "Upload & Analyze PDF",
+    "uploadingPdf": "Uploading PDF...",
+    "profileTitle": "Your Profile",
+    "emptyProfile": "Submit your resume to generate a structured candidate profile.",
+    "analyzedProfile": "Analyzed profile",
+    "noSummary": "No summary provided.",
+    "noSkills": "No skills extracted.",
+    "openUploadedPdf": "Open uploaded PDF",
+    "contactAdmin": "Contact Admin / Support Chat",
+    "deleteProfile": "Delete Resume Profile",
+    "deleting": "Deleting..."
+  },
+  "adminDashboard": {
+    "processedCandidates": "Processed Candidates",
+    "candidateCount": "{{visible}} of {{total}} candidates",
+    "searchLabel": "Search candidates",
+    "searchPlaceholder": "Search by name or skill",
+    "sortLabel": "Sort candidates",
+    "sortOptions": {
+      "newestFirst": "Newest First",
+      "highestScore": "Highest Score",
+      "lowestScore": "Lowest Score"
+    },
+    "exportCandidates": "Export Candidates",
+    "noCandidatesFound": "No candidates found",
+    "emptyNoCandidates": "Analyze a resume to create the first candidate card.",
+    "emptySearch": "Try a different name or skill search.",
+    "noSummary": "No summary provided.",
+    "filterBySkill": "Filter by {{skill}}",
+    "rolesProjects": "{{roles}} roles / {{projects}} projects",
+    "viewProfile": "View Profile",
+    "messageCandidate": "Message Candidate",
+    "previewPdf": "Preview PDF",
+    "deleteCandidate": "Delete Candidate",
+    "deleting": "Deleting...",
+    "profileNotLinked": "This profile is not linked to a candidate account",
+    "candidateLinkedIn": "{{name}} LinkedIn profile",
+    "candidateGitHub": "{{name}} GitHub profile",
+    "previewCandidatePdf": "Preview {{name}} PDF resume",
+    "deleteCandidateLabel": "Delete {{name}}"
+  },
+  "candidateProfile": {
+    "contact": "Contact",
+    "summary": "Summary",
+    "skills": "Skills",
+    "workExperience": "Work Experience",
+    "projects": "Projects",
+    "noSummary": "No summary provided.",
+    "noSkills": "No skills extracted.",
+    "noWorkExperience": "No work experience extracted.",
+    "noProjects": "No projects extracted.",
+    "messageCandidate": "Message Candidate",
+    "profileNotLinked": "This profile is not linked to a candidate account",
+    "closeProfile": "Close profile",
+    "openLinkedIn": "Open LinkedIn profile",
+    "openGitHub": "Open GitHub profile"
+  },
+  "pdfPreview": {
+    "title": "Resume PDF",
+    "openNewTab": "Open in new tab",
+    "close": "Close PDF preview",
+    "iframeTitle": "Resume PDF preview"
+  },
+  "chat": {
+    "liveChat": "Live chat",
+    "close": "Close chat",
+    "noMessages": "No messages yet",
+    "startConversation": "Start the conversation below.",
+    "recipientUnavailable": "No chat recipient is available for this profile.",
+    "messageLabel": "Message",
+    "placeholder": "Write a message...",
+    "send": "Send",
+    "sending": "Sending...",
+    "you": "You",
+    "admin": "Admin",
+    "seen": "Seen",
+    "sent": "Sent",
+    "errors": {
+      "load": "Unable to load messages. Please try again.",
+      "send": "Unable to send message. Please try again."
+    }
+  },
+  "notifications": {
+    "label": "Notifications",
+    "labelWithCount": "Notifications, {{count}} unread",
+    "title": "Notifications",
+    "unread": "{{count}} unread",
+    "markAsRead": "Mark as Read",
+    "marking": "Marking...",
+    "none": "No unread notifications.",
+    "types": {
+      "candidate_application": "New candidate application",
+      "message": "New message"
+    },
+    "errors": {
+      "load": "Unable to load notifications.",
+      "markAll": "Unable to mark notifications as read.",
+      "markOne": "Unable to mark notification as read."
+    }
+  },
+  "status": {
+    "unableOpenChat": "Unable to open chat for this notification.",
+    "unableLoadCandidates": "Unable to load candidates. Make sure the server is running.",
+    "pasteResumeText": "Paste resume text before analyzing.",
+    "authRequired": "Authentication is required.",
+    "candidateProfileAnalyzed": "Your resume profile was analyzed successfully.",
+    "adminCandidateAdded": "{{name}} was added to the candidate list.",
+    "unableAnalyze": "Unable to analyze resume. Check the backend and try again.",
+    "candidatePdfUploaded": "Your PDF resume was uploaded and analyzed successfully.",
+    "adminCandidatePdfAdded": "{{name}} was added from the PDF resume.",
+    "unableUploadPdf": "Unable to upload PDF. Check the backend and try again.",
+    "signInDelete": "Sign in before deleting a candidate.",
+    "candidateProfileDeleted": "Your resume profile was deleted.",
+    "adminCandidateDeleted": "{{name}} was deleted.",
+    "unableDelete": "Unable to delete candidate. Check the backend and try again."
+  },
+  "app": {
+    "candidateConversation": "Candidate conversation",
+    "messageCandidateTitle": "Message {{name}}",
+    "contactAdminTitle": "Contact Admin / Support Chat"
+  }
+}

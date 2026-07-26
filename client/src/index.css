@@ -1,0 +1,638 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #047857;
+  --color-primary-hover: #065f46;
+  --color-primary-soft: #ecfdf5;
+  --color-primary-soft-hover: #d1fae5;
+  --color-primary-border: #a7f3d0;
+  --color-secondary: #4f46e5;
+  --color-secondary-hover: #4338ca;
+  --color-secondary-soft: #eef2ff;
+  --color-secondary-soft-hover: #e0e7ff;
+  --color-secondary-border: #c7d2fe;
+  --color-background: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f4f4f5;
+  --color-surface-hover: #e4e4e7;
+  --color-text-main: #18181b;
+  --color-text-main-hover: #27272a;
+  --color-text-muted: #71717a;
+  --color-text-subtle: #a1a1aa;
+  --color-text-neutral: #3f3f46;
+  --color-border: #e4e4e7;
+  --color-border-strong: #d4d4d8;
+  --color-badge-success: #dcfce7;
+  --color-badge-success-text: #047857;
+  --color-badge-success-border: #bbf7d0;
+  --color-badge-warning: #fef3c7;
+  --color-badge-warning-text: #b45309;
+  --color-badge-warning-text-strong: #92400e;
+  --color-badge-warning-border: #fde68a;
+  --color-badge-danger: #ffe4e6;
+  --color-badge-danger-hover: #fecdd3;
+  --color-badge-danger-text: #be123c;
+  --color-badge-danger-border: #fecdd3;
+  --color-badge-danger-border-hover: #fda4af;
+  --color-message-seen: #38bdf8;
+  --color-overlay: rgb(24 24 27 / 0.5);
+  --color-overlay-subtle: rgb(24 24 27 / 0.4);
+  --color-chat-mine: #18181b;
+  --color-chat-mine-text: #ffffff;
+  --color-chat-other: #ffffff;
+  --color-chat-other-text: #27272a;
+}
+
+:root {
+  color-scheme: light;
+  --radius-control: 0.5rem;
+  --radius-pill: 9999px;
+  --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.06);
+  --shadow-card-hover: 0 10px 26px rgb(15 23 42 / 0.08);
+  --shadow-elevated: 0 24px 64px rgb(15 23 42 / 0.18);
+  --transition-standard: 160ms ease;
+  --focus-primary: rgb(4 120 87 / 0.16);
+  --focus-secondary: rgb(79 70 229 / 0.16);
+  --focus-danger: rgb(190 18 60 / 0.14);
+  --focus-neutral: rgb(63 63 70 / 0.12);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --color-primary: #34d399;
+  --color-primary-hover: #6ee7b7;
+  --color-primary-soft: #052e2b;
+  --color-primary-soft-hover: #064e3b;
+  --color-primary-border: #047857;
+  --color-secondary: #a5b4fc;
+  --color-secondary-hover: #c7d2fe;
+  --color-secondary-soft: #1e1b4b;
+  --color-secondary-soft-hover: #312e81;
+  --color-secondary-border: #4338ca;
+  --color-background: #0f172a;
+  --color-surface: #111827;
+  --color-surface-muted: #1f2937;
+  --color-surface-hover: #334155;
+  --color-text-main: #f8fafc;
+  --color-text-main-hover: #e2e8f0;
+  --color-text-muted: #cbd5e1;
+  --color-text-subtle: #94a3b8;
+  --color-text-neutral: #e5e7eb;
+  --color-border: #334155;
+  --color-border-strong: #475569;
+  --color-badge-success: #064e3b;
+  --color-badge-success-text: #6ee7b7;
+  --color-badge-success-border: #047857;
+  --color-badge-warning: #422006;
+  --color-badge-warning-text: #fbbf24;
+  --color-badge-warning-text-strong: #fcd34d;
+  --color-badge-warning-border: #92400e;
+  --color-badge-danger: #4c0519;
+  --color-badge-danger-hover: #881337;
+  --color-badge-danger-text: #fb7185;
+  --color-badge-danger-border: #9f1239;
+  --color-badge-danger-border-hover: #be123c;
+  --color-message-seen: #38bdf8;
+  --color-overlay: rgb(2 6 23 / 0.72);
+  --color-overlay-subtle: rgb(2 6 23 / 0.58);
+  --color-chat-mine: #047857;
+  --color-chat-mine-text: #ecfdf5;
+  --color-chat-other: #1f2937;
+  --color-chat-other-text: #f8fafc;
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.25);
+  --shadow-card-hover: 0 12px 30px rgb(0 0 0 / 0.34);
+  --shadow-elevated: 0 24px 64px rgb(0 0 0 / 0.48);
+  --focus-primary: rgb(52 211 153 / 0.18);
+  --focus-secondary: rgb(165 180 252 / 0.2);
+  --focus-danger: rgb(251 113 133 / 0.18);
+  --focus-neutral: rgb(226 232 240 / 0.16);
+}
+
+@layer base {
+  body {
+    background: var(--color-background);
+    color: var(--color-text-main);
+    transition:
+      background-color var(--transition-standard),
+      color var(--transition-standard);
+  }
+}
+
+@layer components {
+  .app-shell {
+    min-height: 100vh;
+    background: var(--color-background);
+    color: var(--color-text-main);
+    transition:
+      background-color var(--transition-standard),
+      color var(--transition-standard);
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .btn-accent,
+  .btn-neutral {
+    @apply inline-flex items-center justify-center gap-2 text-sm font-semibold outline-none disabled:cursor-not-allowed;
+    border-radius: var(--radius-control);
+    transition:
+      background-color var(--transition-standard),
+      border-color var(--transition-standard),
+      color var(--transition-standard),
+      box-shadow var(--transition-standard),
+      opacity var(--transition-standard),
+      transform var(--transition-standard);
+  }
+
+  .btn-primary {
+    @apply px-4 py-3;
+    background: var(--color-text-main);
+    color: var(--color-surface);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-text-main-hover);
+  }
+
+  .btn-primary:focus-visible {
+    box-shadow: 0 0 0 4px var(--focus-neutral);
+  }
+
+  .btn-primary:disabled {
+    background: var(--color-text-subtle);
+  }
+
+  .btn-secondary {
+    @apply border px-4 py-3;
+    background: var(--color-secondary-soft);
+    border-color: var(--color-secondary-border);
+    color: var(--color-secondary);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--color-secondary-soft-hover);
+  }
+
+  .btn-secondary:focus-visible {
+    box-shadow: 0 0 0 4px var(--focus-secondary);
+  }
+
+  .btn-secondary:disabled,
+  .btn-accent:disabled {
+    background: var(--color-surface-muted);
+    border-color: var(--color-border);
+    color: var(--color-text-subtle);
+  }
+
+  .btn-neutral:focus-visible {
+    box-shadow: 0 0 0 4px var(--focus-neutral);
+  }
+
+  .btn-secondary:disabled,
+  .btn-neutral:disabled {
+    color: var(--color-text-subtle);
+  }
+
+  .btn-danger {
+    @apply border px-4 py-3;
+    background: var(--color-badge-danger);
+    border-color: var(--color-badge-danger-border);
+    color: var(--color-badge-danger-text);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: var(--color-badge-danger-hover);
+    border-color: var(--color-badge-danger-border-hover);
+  }
+
+  .btn-danger:focus-visible {
+    box-shadow: 0 0 0 4px var(--focus-danger);
+  }
+
+  .btn-accent {
+    @apply border px-4 py-3;
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary-border);
+    color: var(--color-primary);
+  }
+
+  .btn-accent:hover:not(:disabled) {
+    background: var(--color-primary-soft-hover);
+  }
+
+  .btn-accent:focus-visible,
+  .input-field:focus,
+  .input-file:focus {
+    box-shadow: 0 0 0 4px var(--focus-primary);
+  }
+
+  .btn-neutral {
+    @apply border px-3 py-2;
+    background: var(--color-surface-muted);
+    border-color: var(--color-border);
+    color: var(--color-text-neutral);
+  }
+
+  .btn-neutral:hover:not(:disabled) {
+    background: var(--color-surface-hover);
+  }
+
+  .btn-secondary-sm,
+  .btn-accent-sm,
+  .btn-danger-sm,
+  .btn-neutral-sm {
+    @apply px-3 py-2;
+  }
+
+  .btn-icon {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-full border outline-none;
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
+    transition:
+      background-color var(--transition-standard),
+      border-color var(--transition-standard),
+      color var(--transition-standard),
+      box-shadow var(--transition-standard);
+  }
+
+  .btn-icon:hover {
+    background: var(--color-surface-muted);
+    color: var(--color-text-main);
+  }
+
+  .btn-icon:focus-visible {
+    box-shadow: 0 0 0 4px var(--focus-neutral);
+  }
+
+  .card-base {
+    @apply border shadow-sm;
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-card);
+    transition:
+      background-color var(--transition-standard),
+      border-color var(--transition-standard),
+      box-shadow var(--transition-standard),
+      color var(--transition-standard);
+  }
+
+  .card-header {
+    @apply border-b;
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    transition:
+      background-color var(--transition-standard),
+      border-color var(--transition-standard);
+  }
+
+  .card-interactive {
+    @apply cursor-pointer outline-none;
+    transition:
+      border-color var(--transition-standard),
+      box-shadow var(--transition-standard),
+      transform var(--transition-standard);
+  }
+
+  .card-interactive:hover {
+    border-color: var(--color-secondary-border);
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-0.125rem);
+  }
+
+  .card-interactive:focus-visible {
+    box-shadow: 0 0 0 4px var(--focus-secondary);
+  }
+
+  .input-field {
+    @apply w-full border px-4 py-3 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60;
+    background: var(--color-surface);
+    border-color: var(--color-border-strong);
+    border-radius: var(--radius-control);
+    color: var(--color-text-main);
+    color-scheme: inherit;
+    transition:
+      border-color var(--transition-standard),
+      box-shadow var(--transition-standard),
+      background-color var(--transition-standard);
+  }
+
+  .input-field::placeholder {
+    color: var(--color-text-subtle);
+  }
+
+  .input-field:focus {
+    border-color: var(--color-primary);
+  }
+
+  .input-file {
+    @apply block w-full border border-dashed px-4 py-3 text-sm file:mr-4 file:rounded-md file:border-0 file:px-3 file:py-2 file:text-sm file:font-semibold disabled:cursor-not-allowed disabled:opacity-60;
+    background: var(--color-surface-muted);
+    border-color: var(--color-border-strong);
+    border-radius: var(--radius-control);
+    color: var(--color-text-neutral);
+    color-scheme: inherit;
+    transition:
+      border-color var(--transition-standard),
+      box-shadow var(--transition-standard);
+  }
+
+  .input-file:hover:not(:disabled) {
+    border-color: var(--color-text-subtle);
+  }
+
+  .input-file::file-selector-button {
+    background: var(--color-surface);
+    color: var(--color-text-main);
+  }
+
+  .field-label {
+    @apply block text-sm font-medium;
+    color: var(--color-text-neutral);
+  }
+
+  .segmented-control {
+    @apply grid grid-cols-2 p-1;
+    background: var(--color-surface-muted);
+    border-radius: var(--radius-control);
+  }
+
+  .segmented-option {
+    @apply px-3 py-2 text-sm font-semibold outline-none;
+    border-radius: 0.375rem;
+    color: var(--color-text-muted);
+    transition:
+      background-color var(--transition-standard),
+      color var(--transition-standard),
+      box-shadow var(--transition-standard);
+  }
+
+  .segmented-option:hover {
+    color: var(--color-text-main);
+  }
+
+  .segmented-option:focus-visible {
+    box-shadow: 0 0 0 4px var(--focus-neutral);
+  }
+
+  .segmented-option-active {
+    background: var(--color-surface);
+    color: var(--color-text-main);
+    box-shadow: var(--shadow-card);
+  }
+
+  .text-link {
+    @apply text-sm font-semibold outline-none;
+    color: var(--color-primary);
+    transition:
+      color var(--transition-standard),
+      box-shadow var(--transition-standard);
+  }
+
+  .text-link:hover {
+    color: var(--color-primary-hover);
+  }
+
+  .text-link:focus-visible {
+    box-shadow: 0 0 0 4px var(--focus-primary);
+  }
+
+  .token-preview {
+    @apply border p-4;
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary-border);
+    border-radius: var(--radius-control);
+  }
+
+  .token-code {
+    @apply mt-2 block break-all px-3 py-2 text-xs font-semibold ring-1;
+    background: var(--color-surface);
+    border-radius: 0.375rem;
+    color: var(--color-primary-hover);
+    --tw-ring-color: var(--color-primary-border);
+  }
+
+  .badge-status,
+  .badge-skill,
+  .badge-chip {
+    @apply inline-flex w-fit items-center gap-2 rounded-full font-semibold ring-1;
+  }
+
+  .badge-status {
+    @apply px-3 py-1 text-sm;
+  }
+
+  .badge-skill {
+    @apply px-3 py-1 text-xs;
+    background: var(--color-secondary-soft);
+    color: var(--color-secondary);
+    --tw-ring-color: var(--color-secondary-border);
+  }
+
+  .badge-skill-interactive {
+    @apply outline-none;
+    transition:
+      background-color var(--transition-standard),
+      color var(--transition-standard),
+      box-shadow var(--transition-standard);
+  }
+
+  .badge-skill-interactive:hover {
+    background: var(--color-secondary-soft-hover);
+  }
+
+  .badge-skill-interactive:focus-visible {
+    box-shadow: 0 0 0 4px var(--focus-secondary);
+  }
+
+  .badge-chip {
+    @apply max-w-full px-3 py-1.5 text-xs font-medium;
+    background: var(--color-surface-muted);
+    color: var(--color-text-neutral);
+    --tw-ring-color: var(--color-border);
+  }
+
+  .badge-chip:hover {
+    background: var(--color-border);
+  }
+
+  .badge-status-success {
+    background: var(--color-badge-success);
+    color: var(--color-badge-success-text);
+    --tw-ring-color: var(--color-badge-success-border);
+  }
+
+  .badge-status-warning {
+    background: var(--color-badge-warning);
+    color: var(--color-badge-warning-text);
+    --tw-ring-color: var(--color-badge-warning-border);
+  }
+
+  .badge-status-danger {
+    background: var(--color-badge-danger);
+    color: var(--color-badge-danger-text);
+    --tw-ring-color: var(--color-badge-danger-border);
+  }
+
+  .badge-status-info {
+    background: var(--color-secondary-soft);
+    color: var(--color-secondary);
+    --tw-ring-color: var(--color-secondary-border);
+  }
+
+  .badge-status-neutral {
+    background: var(--color-surface-muted);
+    color: var(--color-text-muted);
+    --tw-ring-color: var(--color-border);
+  }
+
+  .modal-backdrop {
+    @apply fixed inset-0 z-50 flex items-center justify-center px-4 py-6;
+    background: var(--color-overlay);
+  }
+
+  .modal-content {
+    @apply w-full overflow-hidden;
+    background: var(--color-surface);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-elevated);
+    transition:
+      background-color var(--transition-standard),
+      color var(--transition-standard);
+  }
+
+  .drawer-backdrop {
+    @apply fixed inset-0 z-[60] flex justify-end;
+    background: var(--color-overlay-subtle);
+  }
+
+  .drawer-panel {
+    @apply flex h-full w-full max-w-md flex-col;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-elevated);
+    transition:
+      background-color var(--transition-standard),
+      color var(--transition-standard);
+  }
+
+  .section-eyebrow {
+    @apply text-sm font-medium;
+    color: var(--color-primary);
+  }
+
+  .section-title {
+    @apply font-semibold tracking-normal;
+    color: var(--color-text-main);
+  }
+
+  .subsection-label {
+    @apply text-sm font-semibold uppercase tracking-normal;
+    color: var(--color-text-muted);
+  }
+
+  .text-muted {
+    color: var(--color-text-muted);
+  }
+
+  .status-alert {
+    @apply rounded-lg border px-4 py-3 text-sm;
+  }
+
+  .status-alert-success {
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary-border);
+    color: var(--color-primary);
+  }
+
+  .status-alert-error {
+    background: var(--color-badge-danger);
+    border-color: var(--color-badge-danger-border);
+    color: var(--color-badge-danger-text);
+  }
+
+  .status-alert-warning {
+    background: var(--color-badge-warning);
+    border-color: var(--color-badge-warning-border);
+    color: var(--color-badge-warning-text-strong);
+  }
+
+  .empty-state {
+    @apply rounded-lg border border-dashed p-8 text-center;
+    background: var(--color-surface);
+    border-color: var(--color-border-strong);
+    transition:
+      background-color var(--transition-standard),
+      border-color var(--transition-standard);
+  }
+
+  .icon-link {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full border outline-none;
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
+    transition:
+      background-color var(--transition-standard),
+      border-color var(--transition-standard),
+      color var(--transition-standard),
+      box-shadow var(--transition-standard);
+  }
+
+  .icon-link:hover {
+    background: var(--color-secondary-soft);
+    border-color: var(--color-secondary-border);
+    color: var(--color-secondary);
+  }
+
+  .icon-link:focus-visible {
+    box-shadow: 0 0 0 4px var(--focus-secondary);
+  }
+
+  .timeline-dot {
+    @apply absolute top-2 h-2.5 w-2.5 rounded-full ring-4;
+    left: -0.3125rem;
+    background: var(--color-primary);
+    --tw-ring-color: var(--color-primary-soft);
+  }
+
+  .notification-count {
+    @apply absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center px-1 text-[11px] font-bold leading-none ring-2;
+    background: var(--color-badge-danger-text);
+    color: var(--color-surface);
+    border-radius: var(--radius-pill);
+    --tw-ring-color: var(--color-surface);
+  }
+
+  .notification-dot {
+    @apply mt-1 h-2 w-2 shrink-0 rounded-full;
+    background: var(--color-badge-danger-text);
+  }
+
+  .chat-bubble {
+    @apply max-w-[82%] rounded-lg px-4 py-3 shadow-sm;
+  }
+
+  .chat-bubble-mine {
+    background: var(--color-chat-mine);
+    color: var(--color-chat-mine-text);
+  }
+
+  .chat-bubble-other {
+    @apply border;
+    background: var(--color-chat-other);
+    border-color: var(--color-border);
+    color: var(--color-chat-other-text);
+  }
+
+  .message-read-status {
+    @apply mt-2 flex items-center justify-end gap-1 text-xs font-medium;
+  }
+
+  .message-read-status-sent {
+    color: var(--color-text-subtle);
+  }
+
+  .message-read-status-seen {
+    color: var(--color-message-seen);
+  }
+}

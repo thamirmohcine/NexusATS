@@ -1,0 +1,194 @@
+{
+  "common": {
+    "appName": "AI Candidate Screener",
+    "unknownDate": "Date inconnue",
+    "justNow": "A l'instant",
+    "score": "Score {{score}}",
+    "notAvailable": "N/A",
+    "roles": {
+      "admin": "Admin",
+      "candidate": "Candidat"
+    },
+    "actions": {
+      "close": "Fermer",
+      "delete": "Supprimer",
+      "preview": "Apercu",
+      "open": "Ouvrir",
+      "send": "Envoyer"
+    }
+  },
+  "language": {
+    "label": "Langue",
+    "english": "Anglais",
+    "french": "Francais",
+    "arabic": "Arabe"
+  },
+  "theme": {
+    "switchToDark": "Passer au mode sombre",
+    "switchToLight": "Passer au mode clair"
+  },
+  "header": {
+    "adminTitle": "AI Candidate Screener",
+    "candidateTitle": "Portail Candidat",
+    "logout": "Se deconnecter"
+  },
+  "auth": {
+    "titles": {
+      "login": "Bon retour",
+      "register": "Creer un compte"
+    },
+    "tabs": {
+      "login": "Connexion",
+      "register": "Inscription"
+    },
+    "fields": {
+      "name": "Nom",
+      "email": "Email",
+      "password": "Mot de passe",
+      "role": "Role"
+    },
+    "buttons": {
+      "login": "Se connecter",
+      "register": "S'inscrire"
+    },
+    "states": {
+      "pleaseWait": "Veuillez patienter..."
+    },
+    "errors": {
+      "authentication": "Impossible de terminer l'authentification"
+    }
+  },
+  "candidatePortal": {
+    "submitTitle": "Envoyer le CV",
+    "submitDescription": "Televersez votre CV PDF ou collez le texte pour generer votre profil.",
+    "resumeText": "Texte du CV",
+    "resumePlaceholder": "Jane Doe\nIngenieure logiciel senior\nTypeScript, React, Node.js...",
+    "analyzeResume": "Analyser le CV",
+    "analyzing": "Analyse...",
+    "dividerOr": "ou",
+    "pdfResume": "CV PDF",
+    "browseFiles": "Parcourir les fichiers",
+    "selectedFile": "Fichier selectionne : {{fileName}}",
+    "noFileSelected": "Aucun fichier selectionne",
+    "uploadAnalyzePdf": "Televerser et analyser le PDF",
+    "uploadingPdf": "Televersement du PDF...",
+    "profileTitle": "Votre profil",
+    "emptyProfile": "Envoyez votre CV pour generer un profil candidat structure.",
+    "analyzedProfile": "Profil analyse",
+    "noSummary": "Aucun resume fourni.",
+    "noSkills": "Aucune competence extraite.",
+    "openUploadedPdf": "Ouvrir le PDF televerse",
+    "contactAdmin": "Contacter l'admin / Support",
+    "deleteProfile": "Supprimer le profil CV",
+    "deleting": "Suppression..."
+  },
+  "adminDashboard": {
+    "processedCandidates": "Candidats traites",
+    "candidateCount": "{{visible}} sur {{total}} candidats",
+    "searchLabel": "Rechercher des candidats",
+    "searchPlaceholder": "Rechercher par nom ou competence",
+    "sortLabel": "Trier les candidats",
+    "sortOptions": {
+      "newestFirst": "Plus recents",
+      "highestScore": "Score le plus eleve",
+      "lowestScore": "Score le plus bas"
+    },
+    "exportCandidates": "Exporter les candidats",
+    "noCandidatesFound": "Aucun candidat trouve",
+    "emptyNoCandidates": "Analysez un CV pour creer la premiere fiche candidat.",
+    "emptySearch": "Essayez une autre recherche par nom ou competence.",
+    "noSummary": "Aucun resume fourni.",
+    "filterBySkill": "Filtrer par {{skill}}",
+    "rolesProjects": "{{roles}} postes / {{projects}} projets",
+    "viewProfile": "Voir le profil",
+    "messageCandidate": "Contacter le candidat",
+    "previewPdf": "Apercu PDF",
+    "deleteCandidate": "Supprimer le candidat",
+    "deleting": "Suppression...",
+    "profileNotLinked": "Ce profil n'est pas lie a un compte candidat",
+    "candidateLinkedIn": "Profil LinkedIn de {{name}}",
+    "candidateGitHub": "Profil GitHub de {{name}}",
+    "previewCandidatePdf": "Apercu du CV PDF de {{name}}",
+    "deleteCandidateLabel": "Supprimer {{name}}"
+  },
+  "candidateProfile": {
+    "contact": "Contact",
+    "summary": "Resume",
+    "skills": "Competences",
+    "workExperience": "Experience professionnelle",
+    "projects": "Projets",
+    "noSummary": "Aucun resume fourni.",
+    "noSkills": "Aucune competence extraite.",
+    "noWorkExperience": "Aucune experience extraite.",
+    "noProjects": "Aucun projet extrait.",
+    "messageCandidate": "Contacter le candidat",
+    "profileNotLinked": "Ce profil n'est pas lie a un compte candidat",
+    "closeProfile": "Fermer le profil",
+    "openLinkedIn": "Ouvrir le profil LinkedIn",
+    "openGitHub": "Ouvrir le profil GitHub"
+  },
+  "pdfPreview": {
+    "title": "CV PDF",
+    "openNewTab": "Ouvrir dans un nouvel onglet",
+    "close": "Fermer l'apercu PDF",
+    "iframeTitle": "Apercu du CV PDF"
+  },
+  "chat": {
+    "liveChat": "Chat en direct",
+    "close": "Fermer le chat",
+    "noMessages": "Aucun message",
+    "startConversation": "Commencez la conversation ci-dessous.",
+    "recipientUnavailable": "Aucun destinataire n'est disponible pour ce profil.",
+    "messageLabel": "Message",
+    "placeholder": "Ecrire un message...",
+    "send": "Envoyer",
+    "sending": "Envoi...",
+    "you": "Vous",
+    "admin": "Admin",
+    "seen": "Vu",
+    "sent": "Envoye",
+    "errors": {
+      "load": "Impossible de charger les messages. Reessayez.",
+      "send": "Impossible d'envoyer le message. Reessayez."
+    }
+  },
+  "notifications": {
+    "label": "Notifications",
+    "labelWithCount": "Notifications, {{count}} non lues",
+    "title": "Notifications",
+    "unread": "{{count}} non lues",
+    "markAsRead": "Marquer comme lu",
+    "marking": "Marquage...",
+    "none": "Aucune notification non lue.",
+    "types": {
+      "candidate_application": "Nouvelle candidature",
+      "message": "Nouveau message"
+    },
+    "errors": {
+      "load": "Impossible de charger les notifications.",
+      "markAll": "Impossible de marquer les notifications comme lues.",
+      "markOne": "Impossible de marquer la notification comme lue."
+    }
+  },
+  "status": {
+    "unableOpenChat": "Impossible d'ouvrir le chat pour cette notification.",
+    "unableLoadCandidates": "Impossible de charger les candidats. Verifiez que le serveur fonctionne.",
+    "pasteResumeText": "Collez le texte du CV avant l'analyse.",
+    "authRequired": "Authentification requise.",
+    "candidateProfileAnalyzed": "Votre profil CV a ete analyse avec succes.",
+    "adminCandidateAdded": "{{name}} a ete ajoute a la liste des candidats.",
+    "unableAnalyze": "Impossible d'analyser le CV. Verifiez le backend et reessayez.",
+    "candidatePdfUploaded": "Votre CV PDF a ete televerse et analyse avec succes.",
+    "adminCandidatePdfAdded": "{{name}} a ete ajoute depuis le CV PDF.",
+    "unableUploadPdf": "Impossible de televerser le PDF. Verifiez le backend et reessayez.",
+    "signInDelete": "Connectez-vous avant de supprimer un candidat.",
+    "candidateProfileDeleted": "Votre profil CV a ete supprime.",
+    "adminCandidateDeleted": "{{name}} a ete supprime.",
+    "unableDelete": "Impossible de supprimer le candidat. Verifiez le backend et reessayez."
+  },
+  "app": {
+    "candidateConversation": "Conversation candidat",
+    "messageCandidateTitle": "Message a {{name}}",
+    "contactAdminTitle": "Contacter l'admin / Support"
+  }
+}

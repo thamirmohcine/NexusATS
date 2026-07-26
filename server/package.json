@@ -1,0 +1,47 @@
+{
+    "dependencies": {
+        "bcryptjs": "^3.0.3",
+        "better-sqlite3": "^12.11.1",
+        "cors": "^2.8.6",
+        "dotenv": "^17.4.2",
+        "express": "^5.2.1",
+        "jsonwebtoken": "^9.0.3",
+        "multer": "^2.2.0",
+        "openai": "^6.49.0",
+        "pdf-parse": "^2.4.5"
+    },
+    "devDependencies": {
+        "@swc/core": "^1.15.46",
+        "@swc/jest": "^0.2.39",
+        "@types/bcryptjs": "^3.0.0",
+        "@types/better-sqlite3": "^7.6.13",
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.6",
+        "@types/jest": "^30.0.0",
+        "@types/jsonwebtoken": "^9.0.10",
+        "@types/multer": "^2.2.0",
+        "@types/node": "^26.1.1",
+        "@types/pdf-parse": "^1.1.5",
+        "@types/supertest": "^7.2.1",
+        "jest": "^30.4.2",
+        "node-gyp": "10.3.1",
+        "supertest": "^7.2.2",
+        "tsx": "^4.23.1",
+        "typescript": "^7.0.2"
+    },
+    "name": "server",
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "dev": "tsx watch src/index.ts",
+        "build": "tsc",
+        "test": "pnpm test:node && pnpm test:jest",
+        "test:jest": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.config.cjs",
+        "test:node": "tsx --test tests/candidateRepository.test.ts tests/notificationRepository.test.ts tests/pdfService.test.ts tests/aiService.test.ts tests/candidateResponse.test.ts tests/authRoutes.test.ts tests/candidateRoutes.test.ts tests/chatRoutes.test.ts tests/notificationRoutes.test.ts"
+    },
+    "pnpm": {
+        "onlyBuiltDependencies": [
+            "better-sqlite3"
+        ]
+    }
+}
