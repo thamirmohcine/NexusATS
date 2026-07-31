@@ -1,4 +1,4 @@
-import type { Candidate } from "./db.js";
+import type { CandidateWithAnalysis } from "./db.js";
 import {
   parseLocalizedSummary,
   type LocalizedSummary,
@@ -62,7 +62,7 @@ const parseJsonArray = <Item>(
   }
 };
 
-export const toCandidateResponse = (candidate: Candidate): CandidateResponse => ({
+export const toCandidateResponse = (candidate: CandidateWithAnalysis): CandidateResponse => ({
   id: candidate.id,
   user_id: candidate.user_id,
   name: candidate.name,

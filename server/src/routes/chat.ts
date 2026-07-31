@@ -15,6 +15,8 @@ import {
   createNotificationRepository,
   type NotificationRepository,
 } from "../notificationRepository.js";
+import { createChatService } from "../services/chatService.js";
+import { createNotificationService } from "../services/notificationService.js";
 import {
   createUserRepository,
   type UserRepository,
@@ -40,16 +42,18 @@ export const createChatRouter = ({
   notificationRepository = createNotificationRepository(database),
 }: CreateChatRouterOptions = {}): Router => {
   const router = Router();
-  const controller = createChatController({
+
+  const notificationService = createNotificationService(notificationRepository);
+  const chatService = createChatService({
     userRepository,
-    candidateRepository,
     messageRepository,
-    notificationRepository,
+    notificationService,
   });
-  const { verifyToken } = createAuthMiddleware({
-    jwtSecret,
-    userRepository,
+  const controller = createChatController({
+    candidateRepository,
+    chatService,
   });
+  const { verifyToken } = createAuthMiddleware({ jwtSecret, userRepository });
 
   router.post("/send", verifyToken, controller.sendMessage);
   router.get("/:candidate_id", verifyToken, controller.getMessages);

@@ -1,9 +1,8 @@
 import OpenAI from "openai";
 
-import {
-  type LocalizedSummary,
-  normalizeLocalizedSummary,
-} from "../localizedSummary.js";
+import type { LocalizedSummary } from "../localizedSummary.js";
+import { normalizeLocalizedSummary } from "../localizedSummary.js";
+import { createLogger } from "./logger.js";
 
 export interface ResumeAnalysis {
   candidateName: string;
@@ -33,7 +32,13 @@ export interface ResumeProject {
 
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
-const MOCK_WARNING_MESSAGE = "[AI Service] Using mock response";
+const MOCK_WARNING_MESSAGE = "Using mock response";
+
+// Module-level logger — created once and bound to the ai module
+const defaultLogger = createLogger({
+  level: (process.env.LOG_LEVEL as "debug" | "info" | "warn" | "error") ?? "info",
+});
+const logger = defaultLogger.child({ module: "AIService" });
 const MOCK_SKILLS = ["TypeScript", "React", "Node.js", "Express", "SQL"];
 const MOCK_SUMMARY: LocalizedSummary = {
   en: "Strong candidate with solid full-stack fundamentals and practical project experience.",
@@ -64,7 +69,7 @@ const mockAnalysis = (resumeText: string): ResumeAnalysis => {
   const candidateName =
     resumeText.trim().split(/\s+/).slice(0, 2).join(" ") || "Alex Johnson";
 
-  console.warn(MOCK_WARNING_MESSAGE);
+  logger.warn(MOCK_WARNING_MESSAGE);
 
   return {
     candidateName,
@@ -228,8 +233,13 @@ export const analyzeResume = async (
   const openai = createOpenAIClient();
 
   if (openai === null) {
+    logger.info("AI analysis: using mock response (no API key)", {
+      textLength: trimmedResumeText.length,
+    });
     return mockAnalysis(trimmedResumeText);
   }
+
+  const startTime = Date.now();
 
   try {
     const completion = await openai.chat.completions.create({
@@ -282,14 +292,35 @@ ${trimmedResumeText}`,
       ],
     });
 
+    const duration = Date.now() - startTime;
+
     const content = completion.choices[0]?.message.content;
 
     if (typeof content !== "string") {
+      logger.warn("AI analysis returned no content", { duration });
       return fallbackAnalysis();
     }
 
-    return parseResumeAnalysisContent(content);
-  } catch {
+    const analysis = parseResumeAnalysisContent(content);
+
+    logger.info("AI analysis completed", {
+      duration,
+      model: GROQ_MODEL,
+      textLength: trimmedResumeText.length,
+      candidateName: analysis.candidateName,
+      score: analysis.score,
+      skillsCount: analysis.skills.length,
+    });
+
+    return analysis;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+
+    logger.warn("AI analysis failed, falling back to mock", {
+      duration,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
     return mockAnalysis(trimmedResumeText);
   }
 };

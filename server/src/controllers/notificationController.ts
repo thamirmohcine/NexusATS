@@ -4,7 +4,6 @@ import type { Notification } from "../db.js";
 import {
   type ErrorResponse,
   parsePositiveInteger,
-  sendError,
 } from "../http.js";
 import { getAuthenticatedUser } from "../middleware/auth.js";
 import type { NotificationRepository } from "../notificationRepository.js";
@@ -43,66 +42,54 @@ export const createNotificationController = ({
     const user = getAuthenticatedUser(request);
 
     if (user === null) {
-      sendError(response, 401, "Authorization token is required");
+      response.status(401).json({ error: "Authorization token is required" });
       return;
     }
 
-    try {
-      response
-        .status(200)
-        .json(notificationRepository.getUnreadNotificationsForUser(user));
-    } catch {
-      sendError(response, 500, "Failed to fetch notifications");
-    }
+    response
+      .status(200)
+      .json(notificationRepository.getUnreadNotificationsForUser(user));
   },
   markAllAsRead: (request, response): void => {
     const user = getAuthenticatedUser(request);
 
     if (user === null) {
-      sendError(response, 401, "Authorization token is required");
+      response.status(401).json({ error: "Authorization token is required" });
       return;
     }
 
-    try {
-      notificationRepository.markUnreadNotificationsAsReadForUser(user);
-      response.status(200).json({
-        message: "Notifications marked as read",
-      });
-    } catch {
-      sendError(response, 500, "Failed to mark notifications as read");
-    }
+    notificationRepository.markUnreadNotificationsAsReadForUser(user);
+    response.status(200).json({
+      message: "Notifications marked as read",
+    });
   },
   markOneAsRead: (request, response): void => {
     const user = getAuthenticatedUser(request);
 
     if (user === null) {
-      sendError(response, 401, "Authorization token is required");
+      response.status(401).json({ error: "Authorization token is required" });
       return;
     }
 
     const notificationId = parsePositiveInteger(request.params.id);
 
     if (notificationId === null) {
-      sendError(response, 404, "Notification not found");
+      response.status(404).json({ error: "Notification not found" });
       return;
     }
 
-    try {
-      const readCount = notificationRepository.markNotificationAsReadForUser(
-        notificationId,
-        user,
-      );
+    const readCount = notificationRepository.markNotificationAsReadForUser(
+      notificationId,
+      user,
+    );
 
-      if (readCount === 0) {
-        sendError(response, 404, "Notification not found");
-        return;
-      }
-
-      response.status(200).json({
-        message: "Notification marked as read",
-      });
-    } catch {
-      sendError(response, 500, "Failed to mark notification as read");
+    if (readCount === 0) {
+      response.status(404).json({ error: "Notification not found" });
+      return;
     }
+
+    response.status(200).json({
+      message: "Notification marked as read",
+    });
   },
 });

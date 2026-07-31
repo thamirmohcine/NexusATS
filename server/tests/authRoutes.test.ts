@@ -6,9 +6,12 @@ import test from "node:test";
 import Database from "better-sqlite3";
 import express from "express";
 
+import { createGlobalErrorHandler } from "../src/middleware/errorHandler.js";
+import { createLogger } from "../src/services/logger.js";
 import { initializeDatabase } from "../src/databaseSchema.js";
 import { createAuthRouter } from "../src/routes/auth.js";
 import { createUserRepository } from "../src/userRepository.js";
+import { createSessionRepository } from "../src/sessionRepository.js";
 
 interface TestServer {
   baseUrl: string;
@@ -29,8 +32,10 @@ const startAuthServer = async (
     createAuthRouter({
       jwtSecret: "test-secret",
       userRepository: createUserRepository(database),
+      sessionRepository: createSessionRepository(database),
     }),
   );
+  app.use(createGlobalErrorHandler(createLogger({ level: "error" })));
 
   const server = app.listen(0);
   await once(server, "listening");
@@ -74,7 +79,7 @@ const readJsonObject = async (
   return body;
 };
 
-test("auth routes register, login, and return the current user from a JWT", async () => {
+test("auth routes register, login, and return access/refresh tokens", async () => {
   const database = new Database(":memory:");
   initializeDatabase(database);
   const testServer = await startAuthServer(database);
@@ -89,7 +94,8 @@ test("auth routes register, login, and return the current user from a JWT", asyn
     const registerBody = await readJsonObject(registerResponse);
 
     assert.equal(registerResponse.status, 201);
-    assert.equal(typeof registerBody.token, "string");
+    assert.equal(typeof registerBody.accessToken, "string");
+    assert.equal(typeof registerBody.refreshToken, "string");
     assert.ok(isRecord(registerBody.user));
     assert.equal(registerBody.user.name, "Ada Lovelace");
     assert.equal(registerBody.user.email, "ada@example.com");
@@ -110,14 +116,35 @@ test("auth routes register, login, and return the current user from a JWT", asyn
     const loginBody = await readJsonObject(loginResponse);
 
     assert.equal(loginResponse.status, 200);
-    assert.equal(typeof loginBody.token, "string");
+    assert.equal(typeof loginBody.accessToken, "string");
+    assert.equal(typeof loginBody.refreshToken, "string");
     assert.ok(isRecord(loginBody.user));
     assert.equal(loginBody.user.email, "ada@example.com");
     assert.equal(loginBody.user.role, "admin");
 
+    // Test refresh endpoint
+    const refreshResponse = await postJson(`${testServer.baseUrl}/api/auth/refresh`, {
+      refreshToken: loginBody.refreshToken,
+    });
+    const refreshBody = await readJsonObject(refreshResponse);
+
+    assert.equal(refreshResponse.status, 200);
+    assert.equal(typeof refreshBody.accessToken, "string");
+    assert.equal(typeof refreshBody.refreshToken, "string");
+    // New tokens should differ from old ones (token rotation)
+    assert.notEqual(refreshBody.accessToken, loginBody.accessToken);
+    assert.notEqual(refreshBody.refreshToken, loginBody.refreshToken);
+
+    // Old refresh token should no longer work (rotation revoked it)
+    const staleRefreshResponse = await postJson(`${testServer.baseUrl}/api/auth/refresh`, {
+      refreshToken: loginBody.refreshToken,
+    });
+    assert.equal(staleRefreshResponse.status, 401);
+
+    // New access token should work with /me
     const meResponse = await fetch(`${testServer.baseUrl}/api/auth/me`, {
       headers: {
-        Authorization: `Bearer ${loginBody.token}`,
+        Authorization: `Bearer ${refreshBody.accessToken}`,
       },
     });
     const meBody = await readJsonObject(meResponse);
@@ -125,6 +152,22 @@ test("auth routes register, login, and return the current user from a JWT", asyn
     assert.equal(meResponse.status, 200);
     assert.equal(meBody.email, "ada@example.com");
     assert.equal(meBody.role, "admin");
+
+    // Test logout
+    const logoutResponse = await postJson(`${testServer.baseUrl}/api/auth/logout`, {
+      refreshToken: refreshBody.refreshToken,
+    });
+    const logoutBody = await readJsonObject(logoutResponse);
+
+    assert.equal(logoutResponse.status, 200);
+    assert.equal(logoutBody.message, "Logged out successfully");
+
+    // Logged-out refresh token should no longer work
+    const afterLogoutRefreshResponse = await postJson(
+      `${testServer.baseUrl}/api/auth/refresh`,
+      { refreshToken: refreshBody.refreshToken },
+    );
+    assert.equal(afterLogoutRefreshResponse.status, 401);
   } finally {
     await testServer.close();
     database.close();
@@ -163,6 +206,32 @@ test("auth routes reject invalid login credentials and missing JWTs", async () =
   }
 });
 
+test("auth routes reject invalid refresh tokens", async () => {
+  const database = new Database(":memory:");
+  initializeDatabase(database);
+  const testServer = await startAuthServer(database);
+
+  try {
+    // Missing refresh token
+    const missingResponse = await postJson(`${testServer.baseUrl}/api/auth/refresh`, {});
+    const missingBody = await readJsonObject(missingResponse);
+
+    assert.equal(missingResponse.status, 400);
+    assert.deepEqual(missingBody, { error: "Refresh token is required" });
+
+    // Invalid refresh token
+    const invalidResponse = await postJson(`${testServer.baseUrl}/api/auth/refresh`, {
+      refreshToken: "invalid-token-that-does-not-exist",
+    });
+    const invalidBody = await readJsonObject(invalidResponse);
+
+    assert.equal(invalidResponse.status, 401);
+    assert.deepEqual(invalidBody, { error: "Invalid or expired refresh token" });
+  } finally {
+    await testServer.close();
+    database.close();
+  }
+});
 
 test("auth routes return safe admin users for authenticated requests", async () => {
   const database = new Database(":memory:");
@@ -188,11 +257,11 @@ test("auth routes return safe admin users for authenticated requests", async () 
       role: "candidate",
     });
 
-    assert.equal(typeof adminRegisterBody.token, "string");
+    assert.equal(typeof adminRegisterBody.accessToken, "string");
 
     const adminsResponse = await fetch(`${testServer.baseUrl}/api/auth/admins`, {
       headers: {
-        Authorization: `Bearer ${adminRegisterBody.token}`,
+        Authorization: `Bearer ${adminRegisterBody.accessToken}`,
       },
     });
     assert.equal(adminsResponse.status, 200);

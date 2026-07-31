@@ -1,15 +1,11 @@
 import { Router } from "express";
 
-import {
-  type AnalyzeResumeService,
-  createCandidateController,
-  type ExtractPdfTextService,
-} from "../controllers/candidateController.js";
 import db from "../config/db.js";
 import {
   createCandidateRepository,
   type CandidateRepository,
 } from "../candidateRepository.js";
+import { createCandidateController } from "../controllers/candidateController.js";
 import { createAuthMiddleware } from "../middleware/auth.js";
 import {
   createUploadSinglePdf,
@@ -21,6 +17,12 @@ import {
 } from "../notificationRepository.js";
 import { analyzeResume } from "../services/ai.js";
 import { extractPdfText } from "../services/pdf.js";
+import {
+  createCandidateService,
+  type AnalyzeResumeService,
+  type ExtractPdfTextService,
+} from "../services/candidateService.js";
+import { createNotificationService } from "../services/notificationService.js";
 import {
   createUserRepository,
   type UserRepository,
@@ -48,17 +50,17 @@ export const createCandidatesRouter = ({
   uploadsDirectory = defaultUploadsDirectory,
 }: CreateCandidatesRouterOptions = {}): Router => {
   const router = Router();
-  const controller = createCandidateController({
+
+  const notificationService = createNotificationService(notificationRepository);
+  const candidateService = createCandidateService({
     candidateRepository,
     analyzeResumeService,
     extractPdfTextService,
-    notificationRepository,
+    notificationService,
     uploadsDirectory,
   });
-  const { verifyToken } = createAuthMiddleware({
-    jwtSecret,
-    userRepository,
-  });
+  const controller = createCandidateController({ candidateService });
+  const { verifyToken } = createAuthMiddleware({ jwtSecret, userRepository });
   const uploadSinglePdf = createUploadSinglePdf(uploadsDirectory);
 
   router.get("/", verifyToken, controller.getCandidates);

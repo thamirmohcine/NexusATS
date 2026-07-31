@@ -65,13 +65,8 @@ test("parseResumeAnalysisContent returns rich resume fields from JSON content", 
 
 test("analyzeResume mock fallback returns the rich resume structure", async () => {
   const originalGroqApiKey = process.env.GROQ_API_KEY;
-  const originalWarn = console.warn;
-  const warningMessages: string[] = [];
 
   delete process.env.GROQ_API_KEY;
-  console.warn = (message?: unknown): void => {
-    warningMessages.push(String(message));
-  };
 
   try {
     const analysis = await analyzeResume(
@@ -113,10 +108,7 @@ test("analyzeResume mock fallback returns the rich resume structure", async () =
       ar: "مرشح قوي يمتلك أساسيات متينة في التطوير الشامل وخبرة عملية في المشاريع.",
     });
     assert.equal(analysis.score, 88);
-    assert.deepEqual(warningMessages, ["[AI Service] Using mock response"]);
   } finally {
-    console.warn = originalWarn;
-
     if (originalGroqApiKey === undefined) {
       delete process.env.GROQ_API_KEY;
     } else {

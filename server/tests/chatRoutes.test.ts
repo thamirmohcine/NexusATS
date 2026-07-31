@@ -9,6 +9,8 @@ import express from "express";
 import { createCandidateRepository } from "../src/candidateRepository.js";
 import { initializeDatabase } from "../src/databaseSchema.js";
 import type { Message } from "../src/db.js";
+import { createGlobalErrorHandler } from "../src/middleware/errorHandler.js";
+import { createLogger } from "../src/services/logger.js";
 import { createAuthRouter } from "../src/routes/auth.js";
 import { createChatRouter } from "../src/routes/chat.js";
 import { createUserRepository } from "../src/userRepository.js";
@@ -47,6 +49,35 @@ const isMessage = (value: unknown): value is Message =>
 const isMessageArray = (value: unknown): value is Message[] =>
   Array.isArray(value) && value.every(isMessage);
 
+const seedCandidate = (
+  database: Database.Database,
+  opts: { user_id: number | null; name: string; email: string },
+): { id: number } => {
+  const repo = createCandidateRepository(database);
+  const candidate = repo.findOrCreateCandidate({
+    user_id: opts.user_id,
+    name: opts.name,
+    email: opts.email,
+  });
+
+  const resume = repo.insertResume({
+    candidate_id: candidate.id,
+    pdf_url: null,
+  });
+  if (resume) {
+    repo.insertResumeAnalysis({
+      resume_id: resume.id,
+      skills: JSON.stringify(["TypeScript"]),
+      experience: null,
+      projects: null,
+      summary: "Profile summary.",
+      score: 88,
+    });
+  }
+
+  return { id: candidate.id };
+};
+
 const startServer = async (): Promise<TestContext> => {
   const database = new Database(":memory:");
   initializeDatabase(database);
@@ -60,6 +91,7 @@ const startServer = async (): Promise<TestContext> => {
     "/api/auth",
     createAuthRouter({
       jwtSecret,
+      database,
       userRepository: users,
     }),
   );
@@ -72,6 +104,7 @@ const startServer = async (): Promise<TestContext> => {
       candidateRepository: candidates,
     }),
   );
+  app.use(createGlobalErrorHandler(createLogger({ level: "error" })));
 
   const listener = app.listen(0);
   await once(listener, "listening");
@@ -128,13 +161,14 @@ const registerUser = async (
 
   assert.equal(response.status, 201);
   assert.ok(isRecord(body));
-  assert.equal(typeof body.token, "string");
+  assert.equal(typeof body.accessToken, "string");
+  assert.equal(typeof body.refreshToken, "string");
   assert.ok(isRecord(body.user));
   assert.equal(typeof body.user.id, "number");
 
   return {
     id: body.user.id,
-    token: body.token,
+    token: body.accessToken,
   };
 };
 
@@ -174,22 +208,17 @@ test("chat routes send and fetch candidate-admin messages in chronological order
       password: "secret",
       role: "candidate",
     });
-    const candidate = candidates.upsertCandidate({
+    const candidate = seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Candidate Profile",
       email: "profile@example.com",
-      skills: JSON.stringify(["TypeScript"]),
-      summary: "Profile summary.",
-      score: 88,
     });
-
-    assert.notEqual(candidate, undefined);
 
     const firstResponse = await postJson(
       `${server.baseUrl}/api/chat/send`,
       {
         receiver_id: admin.id,
-        candidate_id: candidate?.id ?? 0,
+        candidate_id: candidate.id,
         content: "Hello admin, I uploaded my resume.",
       },
       candidateUser.token,
@@ -200,14 +229,14 @@ test("chat routes send and fetch candidate-admin messages in chronological order
     assert.ok(isMessage(firstBody));
     assert.equal(firstBody.sender_id, candidateUser.id);
     assert.equal(firstBody.receiver_id, admin.id);
-    assert.equal(firstBody.candidate_id, candidate?.id);
+    assert.equal(firstBody.candidate_id, candidate.id);
     assert.equal(firstBody.is_read, 0);
 
     const secondResponse = await postJson(
       `${server.baseUrl}/api/chat/send`,
       {
         receiver_id: candidateUser.id,
-        candidate_id: candidate?.id ?? 0,
+        candidate_id: candidate.id,
         content: "Thanks, I reviewed it.",
       },
       admin.token,
@@ -217,12 +246,12 @@ test("chat routes send and fetch candidate-admin messages in chronological order
 
     const candidateMessages = await getMessages(
       server.baseUrl,
-      candidate?.id ?? 0,
+      candidate.id,
       candidateUser.token,
     );
     const adminMessages = await getMessages(
       server.baseUrl,
-      candidate?.id ?? 0,
+      candidate.id,
       admin.token,
     );
 
@@ -265,22 +294,17 @@ test("chat routes mark only messages sent to the current user as read", async ()
       password: "secret",
       role: "candidate",
     });
-    const candidate = candidates.upsertCandidate({
+    const candidate = seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Seen Candidate Profile",
       email: "seen-profile@example.com",
-      skills: JSON.stringify(["TypeScript"]),
-      summary: "Profile summary.",
-      score: 88,
     });
-
-    assert.notEqual(candidate, undefined);
 
     const candidateMessageResponse = await postJson(
       `${server.baseUrl}/api/chat/send`,
       {
         receiver_id: admin.id,
-        candidate_id: candidate?.id ?? 0,
+        candidate_id: candidate.id,
         content: "Candidate to admin.",
       },
       candidateUser.token,
@@ -293,7 +317,7 @@ test("chat routes mark only messages sent to the current user as read", async ()
 
     const adminMessages = await getMessages(
       server.baseUrl,
-      candidate?.id ?? 0,
+      candidate.id,
       admin.token,
     );
 
@@ -307,7 +331,7 @@ test("chat routes mark only messages sent to the current user as read", async ()
       `${server.baseUrl}/api/chat/send`,
       {
         receiver_id: candidateUser.id,
-        candidate_id: candidate?.id ?? 0,
+        candidate_id: candidate.id,
         content: "Admin to candidate.",
       },
       admin.token,
@@ -320,7 +344,7 @@ test("chat routes mark only messages sent to the current user as read", async ()
 
     const adminViewBeforeCandidateReads = await getMessages(
       server.baseUrl,
-      candidate?.id ?? 0,
+      candidate.id,
       admin.token,
     );
 
@@ -331,7 +355,7 @@ test("chat routes mark only messages sent to the current user as read", async ()
 
     const candidateMessages = await getMessages(
       server.baseUrl,
-      candidate?.id ?? 0,
+      candidate.id,
       candidateUser.token,
     );
 
@@ -367,22 +391,17 @@ test("chat routes prevent candidates from accessing another candidate profile ch
       password: "secret",
       role: "candidate",
     });
-    const candidate = candidates.upsertCandidate({
+    const candidate = seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Owned Chat Profile",
       email: "owned-chat-profile@example.com",
-      skills: JSON.stringify(["React"]),
-      summary: "Owned profile.",
-      score: 82,
     });
-
-    assert.notEqual(candidate, undefined);
 
     const forbiddenSendResponse = await postJson(
       `${server.baseUrl}/api/chat/send`,
       {
         receiver_id: admin.id,
-        candidate_id: candidate?.id ?? 0,
+        candidate_id: candidate.id,
         content: "I should not reach this conversation.",
       },
       otherCandidateUser.token,
@@ -393,7 +412,7 @@ test("chat routes prevent candidates from accessing another candidate profile ch
     assert.deepEqual(forbiddenSendBody, { error: "Candidate not found" });
 
     const forbiddenReadResponse = await fetch(
-      `${server.baseUrl}/api/chat/${candidate?.id ?? 0}`,
+      `${server.baseUrl}/api/chat/${candidate.id}`,
       {
         headers: {
           Authorization: `Bearer ${otherCandidateUser.token}`,

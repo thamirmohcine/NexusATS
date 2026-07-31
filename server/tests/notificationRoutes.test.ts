@@ -12,6 +12,8 @@ import express from "express";
 import { createCandidateRepository } from "../src/candidateRepository.js";
 import { initializeDatabase } from "../src/databaseSchema.js";
 import type { Notification } from "../src/db.js";
+import { createGlobalErrorHandler } from "../src/middleware/errorHandler.js";
+import { createLogger } from "../src/services/logger.js";
 import { createNotificationRepository } from "../src/notificationRepository.js";
 import { createAuthRouter } from "../src/routes/auth.js";
 import { createCandidatesRouter } from "../src/routes/candidates.js";
@@ -74,6 +76,30 @@ const isNotification = (value: unknown): value is Notification =>
 const isNotificationArray = (value: unknown): value is Notification[] =>
   Array.isArray(value) && value.every(isNotification);
 
+const seedCandidate = (
+  database: Database.Database,
+  opts: { user_id: number | null; name: string; email: string },
+): { id: number } => {
+  const repo = createCandidateRepository(database);
+  const candidate = repo.findOrCreateCandidate({
+    user_id: opts.user_id,
+    name: opts.name,
+    email: opts.email,
+  });
+  const resume = repo.insertResume({ candidate_id: candidate.id, pdf_url: null });
+  if (resume) {
+    repo.insertResumeAnalysis({
+      resume_id: resume.id,
+      skills: JSON.stringify(["TypeScript"]),
+      experience: null,
+      projects: null,
+      summary: "Profile summary.",
+      score: 88,
+    });
+  }
+  return { id: candidate.id };
+};
+
 const startServer = async (): Promise<TestContext> => {
   const database = new Database(":memory:");
   const uploadsDirectory = await mkdtemp(
@@ -91,6 +117,7 @@ const startServer = async (): Promise<TestContext> => {
     "/api/auth",
     createAuthRouter({
       jwtSecret,
+      database,
       userRepository: users,
     }),
   );
@@ -124,6 +151,7 @@ const startServer = async (): Promise<TestContext> => {
       notificationRepository: notifications,
     }),
   );
+  app.use(createGlobalErrorHandler(createLogger({ level: "error" })));
 
   const listener = app.listen(0);
   await once(listener, "listening");
@@ -182,13 +210,14 @@ const registerUser = async (
 
   assert.equal(response.status, 201);
   assert.ok(isRecord(body));
-  assert.equal(typeof body.token, "string");
+  assert.equal(typeof body.accessToken, "string");
+  assert.equal(typeof body.refreshToken, "string");
   assert.ok(isRecord(body.user));
   assert.equal(typeof body.user.id, "number");
 
   return {
     id: body.user.id,
-    token: body.token,
+    token: body.accessToken,
   };
 };
 
@@ -350,16 +379,11 @@ test("notifications route marks one clicked notification as read", async () => {
       password: "secret",
       role: "candidate",
     });
-    const candidate = candidates.upsertCandidate({
+    const candidate = seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Single Read Candidate Profile",
       email: "single-read-profile@example.com",
-      skills: JSON.stringify(["TypeScript"]),
-      summary: "Profile summary.",
-      score: 88,
     });
-
-    assert.notEqual(candidate, undefined);
 
     assert.equal(
       (
@@ -367,7 +391,7 @@ test("notifications route marks one clicked notification as read", async () => {
           `${server.baseUrl}/api/chat/send`,
           {
             receiver_id: admin.id,
-            candidate_id: candidate?.id ?? 0,
+            candidate_id: candidate.id,
             content: "First unread message.",
           },
           candidateUser.token,
@@ -381,7 +405,7 @@ test("notifications route marks one clicked notification as read", async () => {
           `${server.baseUrl}/api/chat/send`,
           {
             receiver_id: admin.id,
-            candidate_id: candidate?.id ?? 0,
+            candidate_id: candidate.id,
             content: "Second unread message.",
           },
           candidateUser.token,
@@ -431,22 +455,17 @@ test("chat sends admin-role and direct user notifications", async () => {
       password: "secret",
       role: "candidate",
     });
-    const candidate = candidates.upsertCandidate({
+    const candidate = seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Chat Candidate Profile",
       email: "chat-profile@example.com",
-      skills: JSON.stringify(["TypeScript"]),
-      summary: "Profile summary.",
-      score: 88,
     });
-
-    assert.notEqual(candidate, undefined);
 
     const candidateMessageResponse = await postJson(
       `${server.baseUrl}/api/chat/send`,
       {
         receiver_id: admin.id,
-        candidate_id: candidate?.id ?? 0,
+        candidate_id: candidate.id,
         content: "Hello admin.",
       },
       candidateUser.token,
@@ -463,7 +482,7 @@ test("chat sends admin-role and direct user notifications", async () => {
     assert.equal(adminNotifications.notifications[0]?.target_role, "admin");
     assert.equal(adminNotifications.notifications[0]?.type, "message");
     assert.equal(adminNotifications.notifications[0]?.title, "New message");
-    assert.equal(adminNotifications.notifications[0]?.candidate_id, candidate?.id);
+    assert.equal(adminNotifications.notifications[0]?.candidate_id, candidate.id);
     assert.equal(adminNotifications.notifications[0]?.sender_id, candidateUser.id);
     assert.equal(
       adminNotifications.notifications[0]?.content,
@@ -474,7 +493,7 @@ test("chat sends admin-role and direct user notifications", async () => {
       `${server.baseUrl}/api/chat/send`,
       {
         receiver_id: candidateUser.id,
-        candidate_id: candidate?.id ?? 0,
+        candidate_id: candidate.id,
         content: "Thanks for the update.",
       },
       admin.token,
@@ -491,7 +510,7 @@ test("chat sends admin-role and direct user notifications", async () => {
     assert.equal(candidateNotifications.notifications[0]?.user_id, candidateUser.id);
     assert.equal(candidateNotifications.notifications[0]?.target_role, null);
     assert.equal(candidateNotifications.notifications[0]?.type, "message");
-    assert.equal(candidateNotifications.notifications[0]?.candidate_id, candidate?.id);
+    assert.equal(candidateNotifications.notifications[0]?.candidate_id, candidate.id);
     assert.equal(candidateNotifications.notifications[0]?.sender_id, admin.id);
     assert.equal(
       candidateNotifications.notifications[0]?.content,

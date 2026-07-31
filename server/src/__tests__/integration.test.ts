@@ -9,7 +9,9 @@ import request from "supertest";
 
 import { createCandidateRepository } from "../candidateRepository.js";
 import { initializeDatabase } from "../databaseSchema.js";
+import { createGlobalErrorHandler } from "../middleware/errorHandler.js";
 import { createNotificationRepository } from "../notificationRepository.js";
+import { createLogger } from "../services/logger.js";
 import { createAuthRouter } from "../routes/auth.js";
 import { createCandidatesRouter } from "../routes/candidates.js";
 import { createChatRouter } from "../routes/chat.js";
@@ -18,7 +20,8 @@ import type { ResumeAnalysis } from "../services/ai.js";
 import { createUserRepository } from "../userRepository.js";
 
 interface AuthResponseBody {
-  token: string;
+  accessToken: string;
+  refreshToken: string;
   user: {
     id: number;
     name: string;
@@ -70,7 +73,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isAuthResponseBody = (value: unknown): value is AuthResponseBody =>
   isRecord(value) &&
-  typeof value.token === "string" &&
+  typeof value.accessToken === "string" &&
+  typeof value.refreshToken === "string" &&
   isRecord(value.user) &&
   typeof value.user.id === "number" &&
   typeof value.user.name === "string" &&
@@ -102,6 +106,7 @@ const createTestApplication = async (): Promise<TestApplication> => {
     "/api/auth",
     createAuthRouter({
       jwtSecret,
+      database,
       userRepository,
     }),
   );
@@ -135,6 +140,7 @@ const createTestApplication = async (): Promise<TestApplication> => {
       notificationRepository,
     }),
   );
+  app.use(createGlobalErrorHandler(createLogger({ level: "error" })));
 
   cleanupTasks.push(async () => {
     database.close();
@@ -236,7 +242,7 @@ describe("candidate integration", () => {
 
     const uploadResponse = await request(app)
       .post("/api/candidates/upload-pdf")
-      .set("Authorization", `Bearer ${candidate.token}`)
+      .set("Authorization", `Bearer ${candidate.accessToken}`)
       .attach("file", Buffer.from("%PDF-1.4 test resume"), {
         filename: "resume.pdf",
         contentType: "application/pdf",
@@ -263,7 +269,7 @@ describe("candidate integration", () => {
     });
     const forbiddenCandidateDeleteResponse = await request(app)
       .delete(`/api/candidates/${candidateId}`)
-      .set("Authorization", `Bearer ${otherCandidate.token}`);
+      .set("Authorization", `Bearer ${otherCandidate.accessToken}`);
 
     expect(forbiddenCandidateDeleteResponse.status).toBe(404);
     expect(forbiddenCandidateDeleteResponse.body).toEqual({
@@ -272,7 +278,7 @@ describe("candidate integration", () => {
 
     await request(app)
       .post("/api/chat/send")
-      .set("Authorization", `Bearer ${candidate.token}`)
+      .set("Authorization", `Bearer ${candidate.accessToken}`)
       .send({
         receiver_id: admin.user.id,
         candidate_id: candidateId,
@@ -287,7 +293,7 @@ describe("candidate integration", () => {
 
     const adminFetchResponse = await request(app)
       .get("/api/candidates")
-      .set("Authorization", `Bearer ${admin.token}`);
+      .set("Authorization", `Bearer ${admin.accessToken}`);
 
     expect(adminFetchResponse.status).toBe(200);
     expect(Array.isArray(adminFetchResponse.body)).toBe(true);
@@ -295,7 +301,7 @@ describe("candidate integration", () => {
 
     const deleteResponse = await request(app)
       .delete(`/api/candidates/${candidateId}`)
-      .set("Authorization", `Bearer ${admin.token}`);
+      .set("Authorization", `Bearer ${admin.accessToken}`);
 
     expect(deleteResponse.status).toBe(200);
     expect(deleteResponse.body).toEqual({
@@ -334,7 +340,7 @@ describe("chat and notifications integration", () => {
 
     const analyzeResponse = await request(app)
       .post("/api/candidates/analyze")
-      .set("Authorization", `Bearer ${candidate.token}`)
+      .set("Authorization", `Bearer ${candidate.accessToken}`)
       .send({ resumeText: "Candidate resume text" });
     const analyzedCandidateBody: unknown = analyzeResponse.body;
 
@@ -347,7 +353,7 @@ describe("chat and notifications integration", () => {
 
     await request(app)
       .post("/api/chat/send")
-      .set("Authorization", `Bearer ${candidate.token}`)
+      .set("Authorization", `Bearer ${candidate.accessToken}`)
       .send({
         receiver_id: admin.user.id,
         candidate_id: analyzedCandidateBody.id,
@@ -357,7 +363,7 @@ describe("chat and notifications integration", () => {
 
     const notificationsResponse = await request(app)
       .get("/api/notifications")
-      .set("Authorization", `Bearer ${admin.token}`);
+      .set("Authorization", `Bearer ${admin.accessToken}`);
     const notificationsBody: unknown = notificationsResponse.body;
 
     expect(notificationsResponse.status).toBe(200);

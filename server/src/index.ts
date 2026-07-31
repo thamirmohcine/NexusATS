@@ -4,7 +4,10 @@ import cors from "cors";
 import express, { type Request, type Response } from "express";
 
 import "./config/db.js";
+import { createGlobalErrorHandler } from "./middleware/errorHandler.js";
+import { createRequestLogger } from "./middleware/requestLogger.js";
 import { defaultUploadsDirectory } from "./middleware/upload.js";
+import { createLogger } from "./services/logger.js";
 import authRouter from "./routes/auth.js";
 import candidatesRouter from "./routes/candidates.js";
 import chatRouter from "./routes/chat.js";
@@ -15,12 +18,19 @@ interface HealthResponse {
   message: string;
 }
 
+const logger = createLogger({
+  level: (process.env.LOG_LEVEL as "debug" | "info" | "warn" | "error") ?? "info",
+});
+
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 5000;
 
 app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(defaultUploadsDirectory));
+
+// Request logging — captures method, path, status, duration, userId
+app.use(createRequestLogger(logger));
 
 app.use("/api/auth", authRouter);
 app.use("/api/candidates", candidatesRouter);
@@ -37,6 +47,9 @@ app.get(
   },
 );
 
+// Global error handler — must be registered after all routes
+app.use(createGlobalErrorHandler(logger));
+
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+  logger.info("Server started", { port });
 });

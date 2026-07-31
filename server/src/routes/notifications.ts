@@ -7,6 +7,7 @@ import {
   createNotificationRepository,
   type NotificationRepository,
 } from "../notificationRepository.js";
+import { createNotificationService } from "../services/notificationService.js";
 import {
   createUserRepository,
   type UserRepository,
@@ -28,13 +29,9 @@ export const createNotificationsRouter = ({
   notificationRepository = createNotificationRepository(database),
 }: CreateNotificationsRouterOptions = {}): Router => {
   const router = Router();
-  const controller = createNotificationController({
-    notificationRepository,
-  });
-  const { verifyToken } = createAuthMiddleware({
-    jwtSecret,
-    userRepository,
-  });
+
+  const controller = createNotificationController({ notificationRepository });
+  const { verifyToken } = createAuthMiddleware({ jwtSecret, userRepository });
 
   router.get("/", verifyToken, controller.getNotifications);
   router.patch("/read-all", verifyToken, controller.markAllAsRead);
