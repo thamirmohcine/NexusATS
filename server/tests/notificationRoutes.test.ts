@@ -6,11 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import Database from "better-sqlite3";
+import type { Pool } from "pg";
 import express from "express";
 
 import { createCandidateRepository } from "../src/candidateRepository.js";
-import { initializeDatabase } from "../src/databaseSchema.js";
 import type { Notification } from "../src/db.js";
 import { createGlobalErrorHandler } from "../src/middleware/errorHandler.js";
 import { createLogger } from "../src/services/logger.js";
@@ -21,6 +20,7 @@ import { createChatRouter } from "../src/routes/chat.js";
 import { createNotificationsRouter } from "../src/routes/notifications.js";
 import type { ResumeAnalysis } from "../src/services/ai.js";
 import { createUserRepository } from "../src/userRepository.js";
+import { closeTestDatabase, createTestDatabase } from "../src/__tests__/helpers/testDatabase.js";
 
 interface TestServer {
   baseUrl: string;
@@ -34,7 +34,7 @@ interface AuthenticatedTestUser {
 
 interface TestContext {
   candidates: ReturnType<typeof createCandidateRepository>;
-  database: Database.Database;
+  database: Pool;
   server: TestServer;
 }
 
@@ -76,19 +76,19 @@ const isNotification = (value: unknown): value is Notification =>
 const isNotificationArray = (value: unknown): value is Notification[] =>
   Array.isArray(value) && value.every(isNotification);
 
-const seedCandidate = (
-  database: Database.Database,
+const seedCandidate = async (
+  database: Pool,
   opts: { user_id: number | null; name: string; email: string },
-): { id: number } => {
+): Promise<{ id: number }> => {
   const repo = createCandidateRepository(database);
-  const candidate = repo.findOrCreateCandidate({
+  const candidate = await repo.findOrCreateCandidate({
     user_id: opts.user_id,
     name: opts.name,
     email: opts.email,
   });
-  const resume = repo.insertResume({ candidate_id: candidate.id, pdf_url: null });
+  const resume = await repo.insertResume({ candidate_id: candidate.id, pdf_url: null });
   if (resume) {
-    repo.insertResumeAnalysis({
+    await repo.insertResumeAnalysis({
       resume_id: resume.id,
       skills: JSON.stringify(["TypeScript"]),
       experience: null,
@@ -101,11 +101,10 @@ const seedCandidate = (
 };
 
 const startServer = async (): Promise<TestContext> => {
-  const database = new Database(":memory:");
+  const database = await createTestDatabase();
   const uploadsDirectory = await mkdtemp(
     join(tmpdir(), "notification-route-uploads-"),
   );
-  initializeDatabase(database);
 
   const users = createUserRepository(database);
   const candidates = createCandidateRepository(database);
@@ -177,6 +176,7 @@ const startServer = async (): Promise<TestContext> => {
           });
         });
         await rm(uploadsDirectory, { force: true, recursive: true });
+        await closeTestDatabase(database);
       },
     },
   };
@@ -308,7 +308,6 @@ test("notifications route returns application notifications to admins and marks 
     );
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -359,7 +358,6 @@ test("candidate PDF uploads create unread admin notifications", async () => {
     assert.equal(adminNotifications.notifications[0]?.sender_id, candidateUser.id);
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -379,7 +377,7 @@ test("notifications route marks one clicked notification as read", async () => {
       password: "secret",
       role: "candidate",
     });
-    const candidate = seedCandidate(database, {
+    const candidate = await seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Single Read Candidate Profile",
       email: "single-read-profile@example.com",
@@ -435,7 +433,6 @@ test("notifications route marks one clicked notification as read", async () => {
     assert.notEqual(afterRead.notifications[0]?.id, clickedNotificationId);
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -455,7 +452,7 @@ test("chat sends admin-role and direct user notifications", async () => {
       password: "secret",
       role: "candidate",
     });
-    const candidate = seedCandidate(database, {
+    const candidate = await seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Chat Candidate Profile",
       email: "chat-profile@example.com",
@@ -518,6 +515,5 @@ test("chat sends admin-role and direct user notifications", async () => {
     );
   } finally {
     await server.close();
-    database.close();
   }
 });

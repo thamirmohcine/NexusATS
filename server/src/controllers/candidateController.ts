@@ -72,7 +72,7 @@ export interface CandidateController {
 export const createCandidateController = ({
   candidateService,
 }: CreateCandidateControllerOptions): CandidateController => ({
-  getCandidates: asyncHandler((_request, response, next) => {
+  getCandidates: asyncHandler(async (_request, response, next) => {
     const user = getAuthenticatedUser(_request);
 
     if (user === null) {
@@ -80,7 +80,7 @@ export const createCandidateController = ({
       return;
     }
 
-    const candidates = candidateService.getCandidates(user);
+    const candidates = await candidateService.getCandidates(user);
 
     response.status(200).json(candidates);
   }),
@@ -96,10 +96,10 @@ export const createCandidateController = ({
     response.status(200).json({ message: "Candidate deleted successfully" });
   }),
 
-  createCandidate: asyncHandler((request, response) => {
+  createCandidate: asyncHandler(async (request, response) => {
     if (!requireAuth(request, response)) return;
 
-    const candidate = candidateService.createCandidate(
+    const candidate = await candidateService.createCandidate(
       getAuthenticatedUser(request)!,
       request.body,
     );

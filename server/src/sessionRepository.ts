@@ -1,86 +1,75 @@
-import type Database from "better-sqlite3";
+import type { Pool } from "pg";
 
 import type { CreateSessionInput, Session } from "./db.js";
 
 export interface SessionRepository {
-  createSession: (input: CreateSessionInput) => Session | undefined;
-  findByRefreshTokenHash: (hash: string) => Session | undefined;
-  revokeSession: (sessionId: number) => void;
-  revokeAllUserSessions: (userId: number) => void;
-  revokeExpiredSessions: () => void;
+  createSession: (input: CreateSessionInput) => Promise<Session | undefined>;
+  findByRefreshTokenHash: (hash: string) => Promise<Session | undefined>;
+  revokeSession: (sessionId: number) => Promise<void>;
+  revokeAllUserSessions: (userId: number) => Promise<void>;
+  revokeExpiredSessions: () => Promise<void>;
 }
 
-export const createSessionRepository = (
-  database: Database.Database,
-): SessionRepository => {
-  const insertSessionStatement = database.prepare<CreateSessionInput>(`
-    INSERT INTO sessions (user_id, refresh_token_hash, expires_at)
-    VALUES (@user_id, @refresh_token_hash, @expires_at)
-  `);
+export const createSessionRepository = (database: Pool): SessionRepository => {
+  const createSession = async (
+    input: CreateSessionInput,
+  ): Promise<Session | undefined> => {
+    const { rows } = await database.query<Session>(
+      `INSERT INTO sessions (user_id, refresh_token_hash, expires_at)
+      VALUES ($1, $2, $3)
+      RETURNING id, user_id, refresh_token_hash, expires_at, revoked, created_at`,
+      [input.user_id, input.refresh_token_hash, input.expires_at],
+    );
 
-  const selectSessionByHashStatement = database.prepare<[string], Session>(`
-    SELECT
-      id,
-      user_id,
-      refresh_token_hash,
-      expires_at,
-      revoked,
-      created_at
-    FROM sessions
-    WHERE refresh_token_hash = ?
-      AND revoked = 0
-      AND expires_at > datetime('now')
-    LIMIT 1
-  `);
+    return rows[0];
+  };
 
-  const selectSessionByIdStatement = database.prepare<[number], Session>(`
-    SELECT
-      id,
-      user_id,
-      refresh_token_hash,
-      expires_at,
-      revoked,
-      created_at
-    FROM sessions
-    WHERE id = ?
-  `);
+  const findByRefreshTokenHash = async (
+    hash: string,
+  ): Promise<Session | undefined> => {
+    const { rows } = await database.query<Session>(
+      `SELECT
+        id,
+        user_id,
+        refresh_token_hash,
+        expires_at,
+        revoked,
+        created_at
+      FROM sessions
+      WHERE refresh_token_hash = $1
+        AND revoked = 0
+        AND expires_at > NOW()
+      LIMIT 1`,
+      [hash],
+    );
 
-  const revokeSessionStatement = database.prepare<[number]>(`
-    UPDATE sessions
-    SET revoked = 1
-    WHERE id = ?
-  `);
+    return rows[0];
+  };
 
-  const revokeAllUserSessionsStatement = database.prepare<[number]>(`
-    UPDATE sessions
-    SET revoked = 1
-    WHERE user_id = ? AND revoked = 0
-  `);
+  const revokeSession = async (sessionId: number): Promise<void> => {
+    await database.query(`UPDATE sessions SET revoked = 1 WHERE id = $1`, [
+      sessionId,
+    ]);
+  };
 
-  const revokeExpiredSessionsStatement = database.prepare(`
-    UPDATE sessions
-    SET revoked = 1
-    WHERE expires_at <= datetime('now') AND revoked = 0
-  `);
+  const revokeAllUserSessions = async (userId: number): Promise<void> => {
+    await database.query(
+      `UPDATE sessions SET revoked = 1 WHERE user_id = $1 AND revoked = 0`,
+      [userId],
+    );
+  };
 
-  const createSession = (input: CreateSessionInput): Session | undefined => {
-    const result = insertSessionStatement.run(input);
-
-    return selectSessionByIdStatement.get(Number(result.lastInsertRowid));
+  const revokeExpiredSessions = async (): Promise<void> => {
+    await database.query(
+      `UPDATE sessions SET revoked = 1 WHERE expires_at <= NOW() AND revoked = 0`,
+    );
   };
 
   return {
     createSession,
-    findByRefreshTokenHash: (hash: string): Session | undefined =>
-      selectSessionByHashStatement.get(hash),
-    revokeSession: (sessionId: number): void => {
-      revokeSessionStatement.run(sessionId);
-    },
-    revokeAllUserSessions: (userId: number): void => {
-      revokeAllUserSessionsStatement.run(userId);
-    },
-    revokeExpiredSessions: (): void => {
-      revokeExpiredSessionsStatement.run();
-    },
+    findByRefreshTokenHash,
+    revokeSession,
+    revokeAllUserSessions,
+    revokeExpiredSessions,
   };
 };

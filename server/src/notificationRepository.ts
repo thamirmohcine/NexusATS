@@ -1,4 +1,4 @@
-import type Database from "better-sqlite3";
+import type { Pool } from "pg";
 
 import type {
   CreateNotificationInput,
@@ -21,22 +21,18 @@ interface NotificationUserScope {
   role: UserRole;
 }
 
-interface NotificationReadScope extends NotificationUserScope {
-  notification_id: number;
-}
-
 export type { CreateNotificationInput };
 
 export interface NotificationRepository {
   createNotification: (
     input: CreateNotificationInput,
-  ) => Notification | undefined;
-  getUnreadNotificationsForUser: (user: NotificationUserScope) => Notification[];
+  ) => Promise<Notification | undefined>;
+  getUnreadNotificationsForUser: (user: NotificationUserScope) => Promise<Notification[]>;
   markNotificationAsReadForUser: (
     notificationId: number,
     user: NotificationUserScope,
-  ) => number;
-  markUnreadNotificationsAsReadForUser: (user: NotificationUserScope) => number;
+  ) => Promise<number>;
+  markUnreadNotificationsAsReadForUser: (user: NotificationUserScope) => Promise<number>;
 }
 
 const toStorageInput = (
@@ -51,31 +47,29 @@ const toStorageInput = (
   content: input.content,
 });
 
-export const createNotificationRepository = (
-  database: Database.Database,
-): NotificationRepository => {
-  const selectNotificationByIdStatement = database.prepare<
-    [number],
-    Notification
-  >(`
-    SELECT
-      id,
-      user_id,
-      target_role,
-      candidate_id,
-      sender_id,
-      type,
-      title,
-      content,
-      is_read,
-      created_at
-    FROM notifications
-    WHERE id = ?
-  `);
+const notificationColumns = `
+  id,
+  user_id,
+  target_role,
+  candidate_id,
+  sender_id,
+  type,
+  title,
+  content,
+  is_read,
+  created_at
+`;
 
-  const insertNotificationStatement =
-    database.prepare<NotificationStorageInput>(`
-      INSERT INTO notifications (
+export const createNotificationRepository = (
+  database: Pool,
+): NotificationRepository => {
+  const createNotification = async (
+    input: CreateNotificationInput,
+  ): Promise<Notification | undefined> => {
+    const storage = toStorageInput(input);
+
+    const { rows } = await database.query<Notification>(
+      `INSERT INTO notifications (
         user_id,
         target_role,
         candidate_id,
@@ -84,94 +78,89 @@ export const createNotificationRepository = (
         title,
         content
       )
-      VALUES (
-        @user_id,
-        @target_role,
-        @candidate_id,
-        @sender_id,
-        @type,
-        @title,
-        @content
-      )
-    `);
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING ${notificationColumns}`,
+      [
+        storage.user_id,
+        storage.target_role,
+        storage.candidate_id,
+        storage.sender_id,
+        storage.type,
+        storage.title,
+        storage.content,
+      ],
+    );
 
-  const selectUnreadNotificationsStatement = database.prepare<
-    NotificationUserScope,
-    Notification
-  >(`
-    SELECT
-      id,
-      user_id,
-      target_role,
-      candidate_id,
-      sender_id,
-      type,
-      title,
-      content,
-      is_read,
-      created_at
-    FROM notifications
-    WHERE is_read = 0
-      AND (
-        user_id = @id
-        OR (
-          @role = 'admin'
-          AND target_role = 'admin'
-        )
-      )
-    ORDER BY created_at DESC, id DESC
-  `);
+    return rows[0];
+  };
 
-  const markNotificationAsReadStatement =
-    database.prepare<NotificationReadScope>(`
-      UPDATE notifications
-      SET is_read = 1
-      WHERE id = @notification_id
-        AND is_read = 0
+  const getUnreadNotificationsForUser = async (
+    user: NotificationUserScope,
+  ): Promise<Notification[]> => {
+    const { rows } = await database.query<Notification>(
+      `SELECT ${notificationColumns}
+      FROM notifications
+      WHERE is_read = 0
         AND (
-          user_id = @id
+          user_id = $1
           OR (
-            @role = 'admin'
+            $2 = 'admin'
             AND target_role = 'admin'
           )
         )
-    `);
+      ORDER BY created_at DESC, id DESC`,
+      [user.id, user.role],
+    );
 
-  const markUnreadNotificationsAsReadStatement =
-    database.prepare<NotificationUserScope>(`
-      UPDATE notifications
+    return rows;
+  };
+
+  const markNotificationAsReadForUser = async (
+    notificationId: number,
+    user: NotificationUserScope,
+  ): Promise<number> => {
+    const result = await database.query(
+      `UPDATE notifications
+      SET is_read = 1
+      WHERE id = $1
+        AND is_read = 0
+        AND (
+          user_id = $2
+          OR (
+            $3 = 'admin'
+            AND target_role = 'admin'
+          )
+        )`,
+      [notificationId, user.id, user.role],
+    );
+
+    return result.rowCount ?? 0;
+  };
+
+  const markUnreadNotificationsAsReadForUser = async (
+    user: NotificationUserScope,
+  ): Promise<number> => {
+    const result = await database.query(
+      `UPDATE notifications
       SET is_read = 1
       WHERE is_read = 0
         AND (
-          user_id = @id
+          user_id = $1
           OR (
-            @role = 'admin'
+            $2 = 'admin'
             AND target_role = 'admin'
           )
-        )
-    `);
+        )`,
+      [user.id, user.role],
+    );
+
+    return result.rowCount ?? 0;
+  };
 
   return {
-    createNotification: (
-      input: CreateNotificationInput,
-    ): Notification | undefined => {
-      const result = insertNotificationStatement.run(toStorageInput(input));
-
-      return selectNotificationByIdStatement.get(Number(result.lastInsertRowid));
-    },
-    getUnreadNotificationsForUser: (
-      user: NotificationUserScope,
-    ): Notification[] => selectUnreadNotificationsStatement.all(user),
-    markNotificationAsReadForUser: (
-      notificationId: number,
-      user: NotificationUserScope,
-    ): number =>
-      markNotificationAsReadStatement.run({
-        notification_id: notificationId,
-        ...user,
-      }).changes,
-    markUnreadNotificationsAsReadForUser: (
-      user: NotificationUserScope,
-    ): number => markUnreadNotificationsAsReadStatement.run(user).changes,
+    createNotification,
+    getUnreadNotificationsForUser,
+    markNotificationAsReadForUser,
+    markUnreadNotificationsAsReadForUser,
   };
 };

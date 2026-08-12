@@ -38,11 +38,11 @@ export interface AuthController {
   logout: (
     request: Request<Record<string, never>, LogoutResponse | ErrorResponse, unknown>,
     response: Response<LogoutResponse | ErrorResponse>,
-  ) => void;
+  ) => Promise<void>;
   getAdmins: (
     request: Request<Record<string, never>, AuthUserResponse[] | ErrorResponse, unknown>,
     response: Response<AuthUserResponse[] | ErrorResponse>,
-  ) => void;
+  ) => Promise<void>;
   getMe: (
     request: Request<Record<string, never>, AuthUserResponse | ErrorResponse, unknown>,
     response: Response<AuthUserResponse | ErrorResponse>,
@@ -91,7 +91,7 @@ export const createAuthController = ({
     response.status(200).json(result);
   },
 
-  logout: (request, response): void => {
+  logout: async (request, response): Promise<void> => {
     const validation = validateRefreshBody(request.body);
 
     if (!validation.success) {
@@ -99,12 +99,12 @@ export const createAuthController = ({
       return;
     }
 
-    authService.logout(validation.refreshToken);
+    await authService.logout(validation.refreshToken);
 
     response.status(200).json({ message: "Logged out successfully" });
   },
 
-  getAdmins: (request, response): void => {
+  getAdmins: async (request, response): Promise<void> => {
     const user = getAuthenticatedUser(request);
 
     if (user === null) {
@@ -112,7 +112,7 @@ export const createAuthController = ({
       return;
     }
 
-    response.status(200).json(authService.getAdmins());
+    response.status(200).json(await authService.getAdmins());
   },
 
   getMe: (request, response): void => {

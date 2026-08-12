@@ -1,59 +1,60 @@
-import type Database from "better-sqlite3";
+import type { Pool } from "pg";
 
 import type { CreateMessageInput, Message } from "./db.js";
 
 export interface MessageRepository {
-  createMessage: (input: CreateMessageInput) => Message | undefined;
-  getMessagesByCandidateId: (candidateId: number) => Message[];
-  markMessagesAsReadForUser: (candidateId: number, userId: number) => number;
+  createMessage: (input: CreateMessageInput) => Promise<Message | undefined>;
+  getMessagesByCandidateId: (candidateId: number) => Promise<Message[]>;
+  markMessagesAsReadForUser: (candidateId: number, userId: number) => Promise<number>;
 }
 
-export const createMessageRepository = (
-  database: Database.Database,
-): MessageRepository => {
-  const selectMessageByIdStatement = database.prepare<[number], Message>(`
-    SELECT id, sender_id, receiver_id, candidate_id, content, is_read, created_at
-    FROM messages
-    WHERE id = ?
-  `);
+export const createMessageRepository = (database: Pool): MessageRepository => {
+  const createMessage = async (
+    input: CreateMessageInput,
+  ): Promise<Message | undefined> => {
+    const { rows } = await database.query<Message>(
+      `INSERT INTO messages (sender_id, receiver_id, candidate_id, content)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, sender_id, receiver_id, candidate_id, content, is_read, created_at`,
+      [input.sender_id, input.receiver_id, input.candidate_id, input.content],
+    );
 
-  const insertMessageStatement = database.prepare<CreateMessageInput>(`
-    INSERT INTO messages (sender_id, receiver_id, candidate_id, content)
-    VALUES (@sender_id, @receiver_id, @candidate_id, @content)
-  `);
+    return rows[0];
+  };
 
-  const selectMessagesByCandidateIdStatement = database.prepare<
-    [number],
-    Message
-  >(`
-    SELECT id, sender_id, receiver_id, candidate_id, content, is_read, created_at
-    FROM messages
-    WHERE candidate_id = ?
-    ORDER BY created_at ASC, id ASC
-  `);
+  const getMessagesByCandidateId = async (
+    candidateId: number,
+  ): Promise<Message[]> => {
+    const { rows } = await database.query<Message>(
+      `SELECT id, sender_id, receiver_id, candidate_id, content, is_read, created_at
+      FROM messages
+      WHERE candidate_id = $1
+      ORDER BY created_at ASC, id ASC`,
+      [candidateId],
+    );
 
-  const markMessagesAsReadForUserStatement = database.prepare<[number, number]>(`
-    UPDATE messages
-    SET is_read = 1
-    WHERE candidate_id = ?
-      AND receiver_id = ?
-      AND is_read = 0
-  `);
+    return rows;
+  };
 
-  const getMessageById = (id: number): Message | undefined =>
-    selectMessageByIdStatement.get(id);
+  const markMessagesAsReadForUser = async (
+    candidateId: number,
+    userId: number,
+  ): Promise<number> => {
+    const result = await database.query(
+      `UPDATE messages
+      SET is_read = 1
+      WHERE candidate_id = $1
+        AND receiver_id = $2
+        AND is_read = 0`,
+      [candidateId, userId],
+    );
 
-  const createMessage = (input: CreateMessageInput): Message | undefined => {
-    const result = insertMessageStatement.run(input);
-
-    return getMessageById(Number(result.lastInsertRowid));
+    return result.rowCount ?? 0;
   };
 
   return {
     createMessage,
-    getMessagesByCandidateId: (candidateId: number): Message[] =>
-      selectMessagesByCandidateIdStatement.all(candidateId),
-    markMessagesAsReadForUser: (candidateId: number, userId: number): number =>
-      markMessagesAsReadForUserStatement.run(candidateId, userId).changes,
+    getMessagesByCandidateId,
+    markMessagesAsReadForUser,
   };
 };

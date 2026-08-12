@@ -103,14 +103,14 @@ const getRefreshTokenExpiresAt = (): string =>
   new Date(Date.now() + REFRESH_TOKEN_LIFETIME_MS).toISOString();
 
 /** Generate both tokens and persist a new session row. */
-const generateTokenPairAndSession = (
+const generateTokenPairAndSession = async (
   user: User,
   jwtSecret: string,
   sessionRepository: SessionRepository,
-): { accessToken: string; refreshToken: string } => {
+): Promise<{ accessToken: string; refreshToken: string }> => {
   const { token: refreshToken, hash: refreshTokenHash } = createRefreshToken();
   const expiresAt = getRefreshTokenExpiresAt();
-  const session = sessionRepository.createSession({
+  const session = await sessionRepository.createSession({
     user_id: user.id,
     refresh_token_hash: refreshTokenHash,
     expires_at: expiresAt,
@@ -128,7 +128,7 @@ const generateTokenPairAndSession = (
 const isUniqueConstraintError = (error: unknown): boolean =>
   isRecord(error) &&
   typeof error.code === "string" &&
-  error.code === "SQLITE_CONSTRAINT_UNIQUE";
+  (error.code === "23505" || error.code === "SQLITE_CONSTRAINT_UNIQUE");
 
 // ── Validation ─────────────────────────────────────────────────────────
 
@@ -233,9 +233,9 @@ export interface AuthService {
   register(input: RegisterInput): Promise<AuthTokenResponse>;
   login(input: LoginInput): Promise<AuthTokenResponse>;
   refreshAccessToken(refreshToken: string): Promise<RefreshTokenResponse>;
-  logout(refreshToken: string): void;
+  logout(refreshToken: string): Promise<void>;
   getCurrentUser(user: User): AuthUserResponse;
-  getAdmins(): AuthUserResponse[];
+  getAdmins(): Promise<AuthUserResponse[]>;
 }
 
 export const createAuthService = ({
@@ -244,7 +244,7 @@ export const createAuthService = ({
   sessionRepository,
 }: CreateAuthServiceOptions): AuthService => ({
   register: async (input: RegisterInput): Promise<AuthTokenResponse> => {
-    const existingUser = userRepository.getUserByEmail(input.email);
+    const existingUser = await userRepository.getUserByEmail(input.email);
 
     if (existingUser !== undefined) {
       throw new ConflictError("User already exists");
@@ -252,7 +252,7 @@ export const createAuthService = ({
 
     try {
       const hashedPassword = await bcrypt.hash(input.password, passwordSaltRounds);
-      const user = userRepository.createUser({
+      const user = await userRepository.createUser({
         name: input.name,
         email: input.email,
         password: hashedPassword,
@@ -263,7 +263,7 @@ export const createAuthService = ({
         throw new Error("Failed to create user");
       }
 
-      const { accessToken, refreshToken } = generateTokenPairAndSession(
+      const { accessToken, refreshToken } = await generateTokenPairAndSession(
         user,
         jwtSecret,
         sessionRepository,
@@ -284,7 +284,7 @@ export const createAuthService = ({
   },
 
   login: async (input: LoginInput): Promise<AuthTokenResponse> => {
-    const user = userRepository.getUserByEmail(input.email);
+    const user = await userRepository.getUserByEmail(input.email);
 
     if (user === undefined) {
       throw new UnauthorizedError("Invalid email or password");
@@ -296,7 +296,7 @@ export const createAuthService = ({
       throw new UnauthorizedError("Invalid email or password");
     }
 
-    const { accessToken, refreshToken } = generateTokenPairAndSession(
+    const { accessToken, refreshToken } = await generateTokenPairAndSession(
       user,
       jwtSecret,
       sessionRepository,
@@ -313,26 +313,23 @@ export const createAuthService = ({
     refreshToken: string,
   ): Promise<RefreshTokenResponse> => {
     const tokenHash = hashRefreshToken(refreshToken);
-    const session = sessionRepository.findByRefreshTokenHash(tokenHash);
+    const session = await sessionRepository.findByRefreshTokenHash(tokenHash);
 
     if (session === undefined) {
       throw new UnauthorizedError("Invalid or expired refresh token");
     }
 
-    const user = userRepository.getUserById(session.user_id);
+    const user = await userRepository.getUserById(session.user_id);
 
     if (user === undefined) {
       throw new UnauthorizedError("User not found");
     }
 
     // Token rotation: revoke the old session and issue a new token pair
-    sessionRepository.revokeSession(session.id);
+    await sessionRepository.revokeSession(session.id);
 
-    const { accessToken, refreshToken: newRefreshToken } = generateTokenPairAndSession(
-      user,
-      jwtSecret,
-      sessionRepository,
-    );
+    const { accessToken, refreshToken: newRefreshToken } =
+      await generateTokenPairAndSession(user, jwtSecret, sessionRepository);
 
     return {
       accessToken,
@@ -340,20 +337,20 @@ export const createAuthService = ({
     };
   },
 
-  logout: (refreshToken: string): void => {
+  logout: async (refreshToken: string): Promise<void> => {
     const tokenHash = hashRefreshToken(refreshToken);
-    const session = sessionRepository.findByRefreshTokenHash(tokenHash);
+    const session = await sessionRepository.findByRefreshTokenHash(tokenHash);
 
     if (session === undefined) {
       // Silently succeed — token already invalid/expired
       return;
     }
 
-    sessionRepository.revokeSession(session.id);
+    await sessionRepository.revokeSession(session.id);
   },
 
   getCurrentUser: (user: User): AuthUserResponse => toAuthUserResponse(user),
 
-  getAdmins: (): AuthUserResponse[] =>
-    userRepository.getUsersByRole("admin").map(toAuthUserResponse),
+  getAdmins: async (): Promise<AuthUserResponse[]> =>
+    (await userRepository.getUsersByRole("admin")).map(toAuthUserResponse),
 });

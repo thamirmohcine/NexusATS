@@ -10,7 +10,7 @@ export interface NotificationService {
   notifyCandidateApplication(
     candidate: CandidateResponse,
     senderId: number,
-  ): void;
+  ): Promise<void>;
 
   notifyMessageSent(
     senderName: string,
@@ -18,19 +18,19 @@ export interface NotificationService {
     senderId: number,
     receiverId: number,
     candidateId: number,
-  ): void;
+  ): Promise<void>;
 
-  createNotification(input: CreateNotificationInput): void;
+  createNotification(input: CreateNotificationInput): Promise<void>;
 }
 
 export const createNotificationService = (
   notificationRepository: NotificationRepository,
 ): NotificationService => ({
-  notifyCandidateApplication: (
+  notifyCandidateApplication: async (
     candidate: CandidateResponse,
     senderId: number,
-  ): void => {
-    notificationRepository.createNotification({
+  ): Promise<void> => {
+    await notificationRepository.createNotification({
       user_id: null,
       target_role: "admin",
       candidate_id: candidate.id,
@@ -41,14 +41,14 @@ export const createNotificationService = (
     });
   },
 
-  notifyMessageSent: (
+  notifyMessageSent: async (
     senderName: string,
     senderRole: "candidate" | "admin",
     senderId: number,
     receiverId: number,
     candidateId: number,
-  ): void => {
-    notificationRepository.createNotification({
+  ): Promise<void> => {
+    await notificationRepository.createNotification({
       user_id: senderRole === "candidate" ? null : receiverId,
       target_role: senderRole === "candidate" ? "admin" : null,
       candidate_id: candidateId,
@@ -59,7 +59,7 @@ export const createNotificationService = (
     });
   },
 
-  createNotification: (input: CreateNotificationInput): void => {
-    notificationRepository.createNotification(input);
+  createNotification: async (input: CreateNotificationInput): Promise<void> => {
+    await notificationRepository.createNotification(input);
   },
 });

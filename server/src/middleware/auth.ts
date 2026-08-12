@@ -67,11 +67,11 @@ export const createAuthMiddleware = ({
   jwtSecret,
   userRepository,
 }: CreateAuthMiddlewareOptions): AuthMiddleware => {
-  const verifyToken = (
+  const verifyToken = async (
     request: Request,
     response: Response,
     next: NextFunction,
-  ): void => {
+  ): Promise<void> => {
     const token = getBearerToken(request.headers.authorization);
 
     if (token === null) {
@@ -86,7 +86,7 @@ export const createAuthMiddleware = ({
       return;
     }
 
-    const user = userRepository.getUserById(userId);
+    const user = await userRepository.getUserById(userId);
 
     if (user === undefined) {
       sendError(response, 401, "Invalid authorization token");

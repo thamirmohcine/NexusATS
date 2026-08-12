@@ -182,11 +182,11 @@ const deleteUploadedPdfFile = async (
  * fetching the latest resume + analysis data. If none exists, returns
  * the candidate with null analysis fields.
  */
-const buildCandidateWithAnalysis = (
+const buildCandidateWithAnalysis = async (
   candidate: Candidate,
   repository: CandidateRepository,
-): CandidateWithAnalysis =>
-  repository.getCandidateById(candidate.id) ?? {
+): Promise<CandidateWithAnalysis> =>
+  (await repository.getCandidateById(candidate.id)) ?? {
     ...candidate,
     pdf_url: null,
     skills: null,
@@ -199,9 +199,9 @@ const buildCandidateWithAnalysis = (
 // ── Service Factory ────────────────────────────────────────────────────
 
 export interface CandidateService {
-  getCandidates(user: User): CandidateResponse[];
+  getCandidates(user: User): Promise<CandidateResponse[]>;
   deleteCandidate(user: User, candidateId: string): Promise<void>;
-  createCandidate(user: User, body: unknown): CandidateResponse;
+  createCandidate(user: User, body: unknown): Promise<CandidateResponse>;
   analyzeResume(
     user: User,
     body: unknown,
@@ -233,7 +233,7 @@ export const createCandidateService = ({
     const analysis = await analyzeResumeService(resumeText);
 
     // Step 1: Find or create candidate
-    const candidate = candidateRepository.findOrCreateCandidate({
+    const candidate = await candidateRepository.findOrCreateCandidate({
       user_id: user.id,
       name: analysis.candidateName,
       email: analysis.email,
@@ -255,11 +255,11 @@ export const createCandidateService = ({
 
     // If the candidate was unclaimed (legacy/admin-created), claim it for this user
     if (candidate.user_id === null && user.role === "candidate") {
-      candidateRepository.updateCandidateUser(candidate.id, user.id);
+      await candidateRepository.updateCandidateUser(candidate.id, user.id);
     }
 
     // Step 2: Create a resume record
-    const resume = candidateRepository.insertResume({
+    const resume = await candidateRepository.insertResume({
       candidate_id: candidate.id,
       pdf_url: pdfUrl ?? null,
     });
@@ -269,7 +269,7 @@ export const createCandidateService = ({
     }
 
     // Step 3: Create a resume_analysis record
-    const resumeAnalysis = candidateRepository.insertResumeAnalysis({
+    const resumeAnalysis = await candidateRepository.insertResumeAnalysis({
       resume_id: resume.id,
       skills: JSON.stringify(analysis.skills),
       experience: JSON.stringify(analysis.experience),
@@ -283,10 +283,13 @@ export const createCandidateService = ({
     }
 
     // Step 4: Return the full candidate with the latest analysis
-    const fullCandidate = buildCandidateWithAnalysis(candidate, candidateRepository);
+    const fullCandidate = await buildCandidateWithAnalysis(
+      candidate,
+      candidateRepository,
+    );
 
     // Notify admins
-    notificationService.notifyCandidateApplication(
+    await notificationService.notifyCandidateApplication(
       toCandidateResponse(fullCandidate),
       user.id,
     );
@@ -295,11 +298,11 @@ export const createCandidateService = ({
   };
 
   return {
-    getCandidates: (user: User): CandidateResponse[] => {
+    getCandidates: async (user: User): Promise<CandidateResponse[]> => {
       const candidates =
         user.role === "admin"
-          ? candidateRepository.getCandidates()
-          : candidateRepository.getCandidatesByUserId(user.id);
+          ? await candidateRepository.getCandidates()
+          : await candidateRepository.getCandidatesByUserId(user.id);
 
       return candidates.map(toCandidateResponse);
     },
@@ -311,7 +314,7 @@ export const createCandidateService = ({
         throw new NotFoundError("Candidate not found");
       }
 
-      const candidateToDelete = candidateRepository.getCandidateById(id);
+      const candidateToDelete = await candidateRepository.getCandidateById(id);
 
       if (candidateToDelete === undefined) {
         throw new NotFoundError("Candidate not found");
@@ -322,7 +325,7 @@ export const createCandidateService = ({
       }
 
       const deletedCandidate =
-        candidateRepository.deleteCandidateWithRelatedRecords(id);
+        await candidateRepository.deleteCandidateWithRelatedRecords(id);
 
       if (deletedCandidate === undefined) {
         throw new NotFoundError("Candidate not found");
@@ -331,7 +334,7 @@ export const createCandidateService = ({
       await deleteUploadedPdfFile(deletedCandidate.pdf_url, uploadsDirectory);
     },
 
-    createCandidate: (user: User, body: unknown): CandidateResponse => {
+    createCandidate: async (user: User, body: unknown): Promise<CandidateResponse> => {
       if (user.role !== "candidate") {
         throw new ForbiddenError("Only candidates can submit resumes");
       }
@@ -343,7 +346,7 @@ export const createCandidateService = ({
       }
 
       // Step 1: Find or create candidate
-      const candidate = candidateRepository.findOrCreateCandidate({
+      const candidate = await candidateRepository.findOrCreateCandidate({
         user_id: user.id,
         name: validation.candidate.name,
         email: validation.candidate.email,
@@ -357,11 +360,11 @@ export const createCandidateService = ({
 
       // If the candidate was unclaimed, claim it for this user
       if (candidate.user_id === null && user.role === "candidate") {
-        candidateRepository.updateCandidateUser(candidate.id, user.id);
+        await candidateRepository.updateCandidateUser(candidate.id, user.id);
       }
 
       // Step 2: Create a resume record (no PDF)
-      const resume = candidateRepository.insertResume({
+      const resume = await candidateRepository.insertResume({
         candidate_id: candidate.id,
         pdf_url: null,
       });
@@ -378,7 +381,7 @@ export const createCandidateService = ({
               createLocalizedSummary(validation.candidate.summary),
             );
 
-      const resumeAnalysis = candidateRepository.insertResumeAnalysis({
+      const resumeAnalysis = await candidateRepository.insertResumeAnalysis({
         resume_id: resume.id,
         skills: JSON.stringify(validation.candidate.skills),
         experience: null,
@@ -392,7 +395,7 @@ export const createCandidateService = ({
       }
 
       return toCandidateResponse(
-        buildCandidateWithAnalysis(candidate, candidateRepository),
+        await buildCandidateWithAnalysis(candidate, candidateRepository),
       );
     },
 

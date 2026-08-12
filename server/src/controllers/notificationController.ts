@@ -24,21 +24,21 @@ export interface NotificationController {
   getNotifications: (
     request: Request<Record<string, never>, Notification[] | ErrorResponse, unknown>,
     response: Response<Notification[] | ErrorResponse>,
-  ) => void;
+  ) => Promise<void>;
   markAllAsRead: (
     request: Request<Record<string, never>, ReadAllResponse | ErrorResponse, unknown>,
     response: Response<ReadAllResponse | ErrorResponse>,
-  ) => void;
+  ) => Promise<void>;
   markOneAsRead: (
     request: Request<{ id: string }, ReadOneResponse | ErrorResponse, unknown>,
     response: Response<ReadOneResponse | ErrorResponse>,
-  ) => void;
+  ) => Promise<void>;
 }
 
 export const createNotificationController = ({
   notificationRepository,
 }: CreateNotificationControllerOptions): NotificationController => ({
-  getNotifications: (request, response): void => {
+  getNotifications: async (request, response): Promise<void> => {
     const user = getAuthenticatedUser(request);
 
     if (user === null) {
@@ -48,9 +48,9 @@ export const createNotificationController = ({
 
     response
       .status(200)
-      .json(notificationRepository.getUnreadNotificationsForUser(user));
+      .json(await notificationRepository.getUnreadNotificationsForUser(user));
   },
-  markAllAsRead: (request, response): void => {
+  markAllAsRead: async (request, response): Promise<void> => {
     const user = getAuthenticatedUser(request);
 
     if (user === null) {
@@ -58,12 +58,12 @@ export const createNotificationController = ({
       return;
     }
 
-    notificationRepository.markUnreadNotificationsAsReadForUser(user);
+    await notificationRepository.markUnreadNotificationsAsReadForUser(user);
     response.status(200).json({
       message: "Notifications marked as read",
     });
   },
-  markOneAsRead: (request, response): void => {
+  markOneAsRead: async (request, response): Promise<void> => {
     const user = getAuthenticatedUser(request);
 
     if (user === null) {
@@ -78,7 +78,7 @@ export const createNotificationController = ({
       return;
     }
 
-    const readCount = notificationRepository.markNotificationAsReadForUser(
+    const readCount = await notificationRepository.markNotificationAsReadForUser(
       notificationId,
       user,
     );

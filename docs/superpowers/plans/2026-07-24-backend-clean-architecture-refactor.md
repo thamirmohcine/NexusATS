@@ -6,7 +6,7 @@
 
 **Architecture:** Keep existing repositories as data-access boundaries and move request orchestration into controller factories. Route factory options continue to inject repositories and services for tests. Shared JWT authentication and PDF upload setup move into dedicated middleware modules.
 
-**Tech Stack:** Node.js, Express 5, TypeScript, SQLite via better-sqlite3, multer, bcryptjs, jsonwebtoken, pnpm.
+**Tech Stack:** Node.js, Express 5, TypeScript, PostgreSQL via pg (node-postgres), multer, bcryptjs, jsonwebtoken, pnpm.
 
 ## Global Constraints
 
@@ -28,7 +28,7 @@
 - Create: `server/src/middleware/upload.ts`
 
 **Interfaces:**
-- Produces: `db`, `databasePath` from `server/src/config/db.ts`.
+- Produces: `db`, `databaseUrl` from `server/src/config/db.ts`.
 - Produces: `sendError(response, statusCode, message)` and `parsePositiveInteger(value)`.
 - Produces: `createAuthMiddleware({ jwtSecret, userRepository })` returning `{ requireAuth, requireAdmin }`.
 - Produces: `createUploadSinglePdf(uploadsDirectory)` and `buildPdfUrl(request, fileName)`.

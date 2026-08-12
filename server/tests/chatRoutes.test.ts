@@ -3,17 +3,17 @@ import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 
-import Database from "better-sqlite3";
+import type { Pool } from "pg";
 import express from "express";
 
 import { createCandidateRepository } from "../src/candidateRepository.js";
-import { initializeDatabase } from "../src/databaseSchema.js";
 import type { Message } from "../src/db.js";
 import { createGlobalErrorHandler } from "../src/middleware/errorHandler.js";
 import { createLogger } from "../src/services/logger.js";
 import { createAuthRouter } from "../src/routes/auth.js";
 import { createChatRouter } from "../src/routes/chat.js";
 import { createUserRepository } from "../src/userRepository.js";
+import { closeTestDatabase, createTestDatabase } from "../src/__tests__/helpers/testDatabase.js";
 
 interface TestServer {
   baseUrl: string;
@@ -26,7 +26,7 @@ interface AuthenticatedTestUser {
 }
 
 interface TestContext {
-  database: Database.Database;
+  database: Pool;
   candidates: ReturnType<typeof createCandidateRepository>;
   server: TestServer;
 }
@@ -49,23 +49,23 @@ const isMessage = (value: unknown): value is Message =>
 const isMessageArray = (value: unknown): value is Message[] =>
   Array.isArray(value) && value.every(isMessage);
 
-const seedCandidate = (
-  database: Database.Database,
+const seedCandidate = async (
+  database: Pool,
   opts: { user_id: number | null; name: string; email: string },
-): { id: number } => {
+): Promise<{ id: number }> => {
   const repo = createCandidateRepository(database);
-  const candidate = repo.findOrCreateCandidate({
+  const candidate = await repo.findOrCreateCandidate({
     user_id: opts.user_id,
     name: opts.name,
     email: opts.email,
   });
 
-  const resume = repo.insertResume({
+  const resume = await repo.insertResume({
     candidate_id: candidate.id,
     pdf_url: null,
   });
   if (resume) {
-    repo.insertResumeAnalysis({
+    await repo.insertResumeAnalysis({
       resume_id: resume.id,
       skills: JSON.stringify(["TypeScript"]),
       experience: null,
@@ -79,8 +79,7 @@ const seedCandidate = (
 };
 
 const startServer = async (): Promise<TestContext> => {
-  const database = new Database(":memory:");
-  initializeDatabase(database);
+  const database = await createTestDatabase();
 
   const users = createUserRepository(database);
   const candidates = createCandidateRepository(database);
@@ -118,8 +117,8 @@ const startServer = async (): Promise<TestContext> => {
     candidates,
     server: {
       baseUrl: `http://127.0.0.1:${(address as AddressInfo).port}`,
-      close: () =>
-        new Promise<void>((resolve, reject) => {
+      close: async () => {
+        await new Promise<void>((resolve, reject) => {
           listener.close((error) => {
             if (error) {
               reject(error);
@@ -128,7 +127,9 @@ const startServer = async (): Promise<TestContext> => {
 
             resolve();
           });
-        }),
+        });
+        await closeTestDatabase(database);
+      },
     },
   };
 };
@@ -208,7 +209,7 @@ test("chat routes send and fetch candidate-admin messages in chronological order
       password: "secret",
       role: "candidate",
     });
-    const candidate = seedCandidate(database, {
+    const candidate = await seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Candidate Profile",
       email: "profile@example.com",
@@ -274,7 +275,6 @@ test("chat routes send and fetch candidate-admin messages in chronological order
     );
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -294,7 +294,7 @@ test("chat routes mark only messages sent to the current user as read", async ()
       password: "secret",
       role: "candidate",
     });
-    const candidate = seedCandidate(database, {
+    const candidate = await seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Seen Candidate Profile",
       email: "seen-profile@example.com",
@@ -365,7 +365,6 @@ test("chat routes mark only messages sent to the current user as read", async ()
     );
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -391,7 +390,7 @@ test("chat routes prevent candidates from accessing another candidate profile ch
       password: "secret",
       role: "candidate",
     });
-    const candidate = seedCandidate(database, {
+    const candidate = await seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Owned Chat Profile",
       email: "owned-chat-profile@example.com",
@@ -425,7 +424,6 @@ test("chat routes prevent candidates from accessing another candidate profile ch
     assert.deepEqual(forbiddenReadBody, { error: "Candidate not found" });
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -446,6 +444,5 @@ test("chat routes validate authentication and message input", async () => {
     });
   } finally {
     await server.close();
-    database.close();
   }
 });

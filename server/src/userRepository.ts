@@ -1,79 +1,83 @@
-import type Database from "better-sqlite3";
+import type { Pool } from "pg";
 
 import type { CreateUserInput, User, UserRole } from "./db.js";
 
-interface UserEmailLookupInput {
-  email: string;
-}
-
 export interface UserRepository {
-  createUser: (input: CreateUserInput) => User | undefined;
-  getUserByEmail: (email: string) => User | undefined;
-  getUserById: (id: number) => User | undefined;
-  getUsersByRole: (role: UserRole) => User[];
+  createUser: (input: CreateUserInput) => Promise<User | undefined>;
+  getUserByEmail: (email: string) => Promise<User | undefined>;
+  getUserById: (id: number) => Promise<User | undefined>;
+  getUsersByRole: (role: UserRole) => Promise<User[]>;
 }
 
-export const createUserRepository = (
-  database: Database.Database,
-): UserRepository => {
-  const selectUserByIdStatement = database.prepare<[number], User>(`
-    SELECT
-      id,
-      name,
-      email,
-      password,
-      role,
-      created_at
-    FROM users
-    WHERE id = ?
-  `);
+export const createUserRepository = (database: Pool): UserRepository => {
+  const getUserById = async (id: number): Promise<User | undefined> => {
+    const { rows } = await database.query<User>(
+      `SELECT
+        id,
+        name,
+        email,
+        password,
+        role,
+        created_at
+      FROM users
+      WHERE id = $1`,
+      [id],
+    );
 
-  const selectUserByEmailStatement = database.prepare<UserEmailLookupInput, User>(`
-    SELECT
-      id,
-      name,
-      email,
-      password,
-      role,
-      created_at
-    FROM users
-    WHERE lower(email) = lower(@email)
-    LIMIT 1
-  `);
+    return rows[0];
+  };
 
-  const selectUsersByRoleStatement = database.prepare<[UserRole], User>(`
-    SELECT
-      id,
-      name,
-      email,
-      password,
-      role,
-      created_at
-    FROM users
-    WHERE role = ?
-    ORDER BY created_at ASC, id ASC
-  `);
+  const getUserByEmail = async (email: string): Promise<User | undefined> => {
+    const { rows } = await database.query<User>(
+      `SELECT
+        id,
+        name,
+        email,
+        password,
+        role,
+        created_at
+      FROM users
+      WHERE lower(email) = lower($1)
+      LIMIT 1`,
+      [email],
+    );
 
-  const insertUserStatement = database.prepare<CreateUserInput>(`
-    INSERT INTO users (name, email, password, role)
-    VALUES (@name, @email, @password, @role)
-  `);
+    return rows[0];
+  };
 
-  const getUserById = (id: number): User | undefined =>
-    selectUserByIdStatement.get(id);
+  const getUsersByRole = async (role: UserRole): Promise<User[]> => {
+    const { rows } = await database.query<User>(
+      `SELECT
+        id,
+        name,
+        email,
+        password,
+        role,
+        created_at
+      FROM users
+      WHERE role = $1
+      ORDER BY created_at ASC, id ASC`,
+      [role],
+    );
 
-  const createUser = (input: CreateUserInput): User | undefined => {
-    const result = insertUserStatement.run(input);
+    return rows;
+  };
 
-    return getUserById(Number(result.lastInsertRowid));
+  const createUser = async (input: CreateUserInput): Promise<User | undefined> => {
+    const { rows } = await database.query<User>(
+      `INSERT INTO users (name, email, password, role)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, name, email, password, role, created_at`,
+      [input.name, input.email, input.password, input.role],
+    );
+
+    return rows[0];
   };
 
   return {
     createUser,
-    getUserByEmail: (email: string): User | undefined =>
-      selectUserByEmailStatement.get({ email }),
+    getUserByEmail,
     getUserById,
-    getUsersByRole: (role: UserRole): User[] =>
-      selectUsersByRoleStatement.all(role),
+    getUsersByRole,
   };
 };

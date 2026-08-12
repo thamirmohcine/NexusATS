@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 
-import Database from "better-sqlite3";
+import type { Pool } from "pg";
 import express, { type Express } from "express";
 import { access, mkdtemp, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -8,7 +8,6 @@ import { tmpdir } from "node:os";
 import request from "supertest";
 
 import { createCandidateRepository } from "../candidateRepository.js";
-import { initializeDatabase } from "../databaseSchema.js";
 import { createGlobalErrorHandler } from "../middleware/errorHandler.js";
 import { createNotificationRepository } from "../notificationRepository.js";
 import { createLogger } from "../services/logger.js";
@@ -18,6 +17,7 @@ import { createChatRouter } from "../routes/chat.js";
 import { createNotificationsRouter } from "../routes/notifications.js";
 import type { ResumeAnalysis } from "../services/ai.js";
 import { createUserRepository } from "../userRepository.js";
+import { closeTestDatabase, createTestDatabase } from "./helpers/testDatabase.js";
 
 interface AuthResponseBody {
   accessToken: string;
@@ -37,13 +37,9 @@ interface CandidateResponseBody {
   pdf_url: string | null;
 }
 
-interface CountRow {
-  count: number;
-}
-
 interface TestApplication {
   app: Express;
-  database: Database.Database;
+  database: Pool;
   uploadsDirectory: string;
 }
 
@@ -91,10 +87,8 @@ const isCandidateResponseBody = (
   (typeof value.pdf_url === "string" || value.pdf_url === null);
 
 const createTestApplication = async (): Promise<TestApplication> => {
-  const database = new Database(":memory:");
+  const database = await createTestDatabase();
   const uploadsDirectory = await mkdtemp(join(tmpdir(), "jest-uploads-"));
-
-  initializeDatabase(database);
 
   const userRepository = createUserRepository(database);
   const candidateRepository = createCandidateRepository(database);
@@ -143,7 +137,7 @@ const createTestApplication = async (): Promise<TestApplication> => {
   app.use(createGlobalErrorHandler(createLogger({ level: "error" })));
 
   cleanupTasks.push(async () => {
-    database.close();
+    await closeTestDatabase(database);
     await rm(uploadsDirectory, { force: true, recursive: true });
   });
 
@@ -176,18 +170,17 @@ const registerUser = async (
   return body;
 };
 
-const getCandidateScopedCount = (
-  database: Database.Database,
+const getCandidateScopedCount = async (
+  database: Pool,
   tableName: "messages" | "notifications",
   candidateId: number,
-): number => {
-  const row = database
-    .prepare<[number], CountRow>(
-      `SELECT COUNT(*) AS count FROM ${tableName} WHERE candidate_id = ?`,
-    )
-    .get(candidateId);
+): Promise<number> => {
+  const { rows } = await database.query<{ count: string }>(
+    `SELECT COUNT(*)::int AS count FROM ${tableName} WHERE candidate_id = $1`,
+    [candidateId],
+  );
 
-  return row?.count ?? 0;
+  return Number(rows[0]?.count ?? 0);
 };
 
 afterEach(async () => {
@@ -286,8 +279,8 @@ describe("candidate integration", () => {
       })
       .expect(201);
 
-    expect(getCandidateScopedCount(database, "messages", candidateId)).toBe(1);
-    expect(getCandidateScopedCount(database, "notifications", candidateId)).toBe(
+    expect(await getCandidateScopedCount(database, "messages", candidateId)).toBe(1);
+    expect(await getCandidateScopedCount(database, "notifications", candidateId)).toBe(
       2,
     );
 
@@ -307,8 +300,8 @@ describe("candidate integration", () => {
     expect(deleteResponse.body).toEqual({
       message: "Candidate deleted successfully",
     });
-    expect(getCandidateScopedCount(database, "messages", candidateId)).toBe(0);
-    expect(getCandidateScopedCount(database, "notifications", candidateId)).toBe(
+    expect(await getCandidateScopedCount(database, "messages", candidateId)).toBe(0);
+    expect(await getCandidateScopedCount(database, "notifications", candidateId)).toBe(
       0,
     );
 

@@ -136,5 +136,5 @@ export interface CreateNotificationInput {
   content: string;
 }
 
-export { databasePath, db } from "./config/db.js";
+export { db } from "./config/db.js";
 export { db as default } from "./config/db.js";

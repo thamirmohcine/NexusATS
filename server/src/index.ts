@@ -3,7 +3,7 @@ import "dotenv/config";
 import cors from "cors";
 import express, { type Request, type Response } from "express";
 
-import "./config/db.js";
+import { db, initializeDatabase } from "./config/db.js";
 import { createGlobalErrorHandler } from "./middleware/errorHandler.js";
 import { createRequestLogger } from "./middleware/requestLogger.js";
 import { defaultUploadsDirectory } from "./middleware/upload.js";
@@ -50,6 +50,16 @@ app.get(
 // Global error handler — must be registered after all routes
 app.use(createGlobalErrorHandler(logger));
 
-app.listen(port, () => {
-  logger.info("Server started", { port });
+const start = async (): Promise<void> => {
+  await initializeDatabase(db);
+  app.listen(port, () => {
+    logger.info("Server started", { port });
+  });
+};
+
+start().catch((error: unknown) => {
+  logger.error("Failed to initialize the database", {
+    error: error instanceof Error ? error.message : String(error),
+  });
+  process.exit(1);
 });

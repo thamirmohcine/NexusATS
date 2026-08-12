@@ -8,7 +8,7 @@
 [![React](https://img.shields.io/badge/Frontend-React-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Build-Vite-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
 [![Express](https://img.shields.io/badge/Backend-Express-000000?logo=express&logoColor=white)](https://expressjs.com/)
-[![SQLite](https://img.shields.io/badge/Database-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Groq](https://img.shields.io/badge/AI-Groq-F55036?logo=groq&logoColor=white)](https://groq.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![pnpm](https://img.shields.io/badge/Package_Manager-pnpm-F69220?logo=pnpm&logoColor=white)](https://pnpm.io/)
@@ -83,7 +83,7 @@ AI Candidate Screener is a full-stack recruitment SaaS that automates resume ana
 |---|---|
 | **Express 5** | HTTP server with middleware-based routing |
 | **TypeScript 7** | Full type coverage for controllers, repositories, and services |
-| **better-sqlite3** | Synchronous SQLite driver with prepared statements |
+| **pg (node-postgres)** | Async PostgreSQL driver with connection pooling and prepared statements |
 | **jsonwebtoken** | JWT issuance and verification |
 | **bcryptjs** | Password hashing and comparison |
 | **Multer** | Multipart file upload handling |
@@ -94,7 +94,7 @@ AI Candidate Screener is a full-stack recruitment SaaS that automates resume ana
 
 | Component | Details |
 |---|---|
-| **Database** | SQLite (single-file `screener.db`) with foreign keys, cascading deletes, and unique constraints |
+| **Database** | PostgreSQL (connection via `DATABASE_URL`) with foreign keys, cascading deletes, and unique constraints |
 | **AI Provider** | Groq (Llama 3.3 70B) — mock fallback when API key is absent |
 | **Package Manager** | pnpm — workspace-free monorepo with `client/` and `server/` as sibling packages |
 
@@ -104,6 +104,7 @@ AI Candidate Screener is a full-stack recruitment SaaS that automates resume ana
 
 - **Node.js** >= 22
 - **pnpm** >= 9 (`npm install -g pnpm`)
+- **PostgreSQL** >= 14 running locally (or any `DATABASE_URL`), e.g. `postgres://postgres:postgres@localhost:5432/screener`
 - A **Groq API key** ([get one free](https://console.groq.com/keys)) — the app falls back to mock data without one
 
 ---
@@ -119,8 +120,12 @@ cd ai-candidate-screener
 pnpm --prefix client install
 pnpm --prefix server install
 
-# 3. Create environment file
-cp .env.example .env   # or create manually (see below)
+# 3. Create environment file (server/.env.example has a Postgres-ready template)
+cp server/.env.example server/.env
+# 3b. Make sure your Postgres database exists, e.g.:
+#   createdb screener
+#   (or set DATABASE_URL to your own instance)
+#   The server creates all tables automatically on startup.
 
 # 4. Start the backend (runs on port 5000 by default)
 pnpm --prefix server dev
@@ -138,6 +143,10 @@ Open **http://localhost:5173** in your browser. The first user to register becom
 Create a `.env` file in the project root (or in `server/` — both are loaded):
 
 ```env
+# PostgreSQL connection string (default when omitted:
+# postgres://postgres:postgres@localhost:5432/screener)
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/screener
+
 # Required for AI-powered resume analysis (get one free at https://console.groq.com/keys)
 GROQ_API_KEY=gsk_your_api_key_here
 
@@ -184,7 +193,7 @@ PORT=5000
 │   │   ├── userRepository.ts       # SQL queries for users
 │   │   ├── messageRepository.ts    # SQL queries for messages
 │   │   ├── notificationRepository.ts # SQL queries for notifications
-│   │   ├── config/db.ts           # SQLite connection + initialization
+│   │   ├── config/db.ts           # PostgreSQL connection (pg Pool) + initialization
 │   │   ├── databaseSchema.ts       # Schema creation and migrations
 │   │   ├── candidateResponse.ts    # API response shaping helpers
 │   │   ├── localizedSummary.ts     # Multi-language summary builder
@@ -216,7 +225,7 @@ Browser
                                                             │
                                                           Express
                                                             │
- Route ───► Controller ───► Repository ───► SQLite DB
+ Route ───► Controller ───► Repository ───► PostgreSQL
 (routes/)   (controllers/)   (*Repository.ts)
                 │
                 └──► Services (AI, PDF, ...)
@@ -360,5 +369,5 @@ Key principles:
 ---
 
 <div align="center">
-  <sub>Built with ❤️ using React, Express, TypeScript, SQLite, and Groq AI</sub>
+  <sub>Built with ❤️ using React, Express, TypeScript, PostgreSQL, and Groq AI</sub>
 </div>

@@ -8,7 +8,7 @@ AI Candidate Screener is a full-stack resume screening and recruitment portal.
 
 - Frontend: React, Vite, TypeScript, Tailwind CSS
 - Backend: Node.js, Express, TypeScript
-- Database: SQLite with `better-sqlite3`
+- Database: PostgreSQL with `pg` (node-postgres) connection pooling
 - AI: OpenAI-compatible chat completions, currently Groq-compatible through the OpenAI SDK
 - Package manager: `pnpm`
 
@@ -87,8 +87,8 @@ Frontend boundaries:
 ### Backend Structure
 
 - `server/src/index.ts`: app setup, middleware registration, static uploads, route mounting, and listen logic.
-- `server/src/config/db.ts`: SQLite connection and database initialization entrypoint.
-- `server/src/databaseSchema.ts`: schema creation and safe column migrations.
+- `server/src/config/db.ts`: PostgreSQL connection (pg Pool) and database initialization entrypoint.
+- `server/src/databaseSchema.ts`: schema creation and safe column migrations. `initializeDatabase` is async and must be awaited at startup before `app.listen`.
 - `server/src/routes/`: lightweight route declarations only.
 - `server/src/controllers/`: request validation, orchestration, status codes, and JSON responses.
 - `server/src/*Repository.ts`: SQL queries and persistence logic. If repository modules are moved into `repositories/`, move them consistently.
@@ -101,7 +101,7 @@ Backend boundaries:
 
 - Routes must not contain business logic or SQL.
 - Controllers must not manually open database connections.
-- Repositories own SQL statements and database row mapping.
+- Repositories own SQL statements and database row mapping. All repository methods are async and use `$1, $2, ...` positional parameters (no named params, no `?` placeholders).
 - Middleware owns token verification, role enforcement, and upload parsing.
 - Services own external I/O, AI parsing, PDF extraction, and reusable domain operations.
 
@@ -112,7 +112,7 @@ Backend boundaries:
 - Role-Based Access Control: never trust client-provided role or user id. Derive identity from the verified JWT.
 - Candidate Data Isolation: candidates can fetch, replace, upload, chat about, and delete only their own profile. Admins can access all candidate profiles.
 - Consistent Contracts: when API response fields change, update backend types, frontend types, services, hooks, and UI together.
-- Safe Persistence: do not drop existing SQLite tables or user data during routine schema changes. Use additive migrations and default values.
+- Safe Persistence: do not drop existing tables or user data during routine schema changes. Use additive migrations (`ADD COLUMN IF NOT EXISTS`) and default values.
 - Local Development Resilience: AI analysis must keep a mock fallback when the API key is missing or the provider fails.
 
 ## API Standards
@@ -133,7 +133,7 @@ Backend boundaries:
 
 ## Database Rules
 
-- Candidate arrays and nested data are stored as JSON strings in SQLite and returned as parsed JSON objects to the client.
+- Candidate arrays and nested data are stored as JSON strings in PostgreSQL `TEXT` columns and returned as parsed JSON objects to the client.
 - Candidate records include ownership through `user_id`; all candidate-role queries must filter by it.
 - Uploaded PDF files use the static `/uploads/...` URL stored in `pdf_url`.
 - Passwords must be hashed with `bcryptjs`.

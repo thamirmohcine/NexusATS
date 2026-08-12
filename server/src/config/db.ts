@@ -1,17 +1,22 @@
-import Database from "better-sqlite3";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import pg from "pg";
 
 import { initializeDatabase } from "../databaseSchema.js";
 
-const currentDir = dirname(fileURLToPath(import.meta.url));
-const serverDir = resolve(currentDir, "../..");
+const { Pool } = pg;
 
-export const databasePath = resolve(serverDir, "screener.db");
+export const databaseUrl =
+  process.env.DATABASE_URL ??
+  "postgres://postgres:postgres@localhost:5432/screener";
 
-export const db = new Database(databasePath);
-db.pragma("foreign_keys = ON");
+// Keep timestamps as strings so the API contract (ISO strings) and the
+// frontend `new Date(...)` parsing behave exactly as they did with SQLite.
+// Without these parsers node-postgres would return Date objects.
+pg.types.setTypeParser(pg.types.builtins.TIMESTAMP, (value: string) => value);
+pg.types.setTypeParser(pg.types.builtins.TIMESTAMPTZ, (value: string) => value);
 
-initializeDatabase(db);
+export const db = new Pool({
+  connectionString: databaseUrl,
+});
 
+export { initializeDatabase };
 export default db;

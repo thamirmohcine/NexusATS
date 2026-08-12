@@ -3,15 +3,15 @@ import { once } from "node:events";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 
-import Database from "better-sqlite3";
+import type { Pool } from "pg";
 import express from "express";
 
 import { createGlobalErrorHandler } from "../src/middleware/errorHandler.js";
 import { createLogger } from "../src/services/logger.js";
-import { initializeDatabase } from "../src/databaseSchema.js";
 import { createAuthRouter } from "../src/routes/auth.js";
 import { createUserRepository } from "../src/userRepository.js";
 import { createSessionRepository } from "../src/sessionRepository.js";
+import { closeTestDatabase, createTestDatabase } from "../src/__tests__/helpers/testDatabase.js";
 
 interface TestServer {
   baseUrl: string;
@@ -21,9 +21,7 @@ interface TestServer {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const startAuthServer = async (
-  database: Database.Database,
-): Promise<TestServer> => {
+const startAuthServer = async (database: Pool): Promise<TestServer> => {
   const app = express();
 
   app.use(express.json());
@@ -31,6 +29,7 @@ const startAuthServer = async (
     "/api/auth",
     createAuthRouter({
       jwtSecret: "test-secret",
+      database,
       userRepository: createUserRepository(database),
       sessionRepository: createSessionRepository(database),
     }),
@@ -80,8 +79,7 @@ const readJsonObject = async (
 };
 
 test("auth routes register, login, and return access/refresh tokens", async () => {
-  const database = new Database(":memory:");
-  initializeDatabase(database);
+  const database = await createTestDatabase();
   const testServer = await startAuthServer(database);
 
   try {
@@ -102,9 +100,10 @@ test("auth routes register, login, and return access/refresh tokens", async () =
     assert.equal(registerBody.user.role, "admin");
     assert.equal("password" in registerBody.user, false);
 
-    const storedUser = database
-      .prepare<[], { password: string }>("SELECT password FROM users LIMIT 1")
-      .get();
+    const storedUserResult = await database.query<{ password: string }>(
+      "SELECT password FROM users LIMIT 1",
+    );
+    const storedUser = storedUserResult.rows[0];
 
     assert.notEqual(storedUser?.password, "correct-horse-battery-staple");
     assert.ok(storedUser?.password.startsWith("$2"));
@@ -170,13 +169,12 @@ test("auth routes register, login, and return access/refresh tokens", async () =
     assert.equal(afterLogoutRefreshResponse.status, 401);
   } finally {
     await testServer.close();
-    database.close();
+    await closeTestDatabase(database);
   }
 });
 
 test("auth routes reject invalid login credentials and missing JWTs", async () => {
-  const database = new Database(":memory:");
-  initializeDatabase(database);
+  const database = await createTestDatabase();
   const testServer = await startAuthServer(database);
 
   try {
@@ -202,13 +200,12 @@ test("auth routes reject invalid login credentials and missing JWTs", async () =
     assert.deepEqual(meBody, { error: "Authorization token is required" });
   } finally {
     await testServer.close();
-    database.close();
+    await closeTestDatabase(database);
   }
 });
 
 test("auth routes reject invalid refresh tokens", async () => {
-  const database = new Database(":memory:");
-  initializeDatabase(database);
+  const database = await createTestDatabase();
   const testServer = await startAuthServer(database);
 
   try {
@@ -229,13 +226,12 @@ test("auth routes reject invalid refresh tokens", async () => {
     assert.deepEqual(invalidBody, { error: "Invalid or expired refresh token" });
   } finally {
     await testServer.close();
-    database.close();
+    await closeTestDatabase(database);
   }
 });
 
 test("auth routes return safe admin users for authenticated requests", async () => {
-  const database = new Database(":memory:");
-  initializeDatabase(database);
+  const database = await createTestDatabase();
   const testServer = await startAuthServer(database);
 
   try {
@@ -277,6 +273,6 @@ test("auth routes return safe admin users for authenticated requests", async () 
     assert.equal("password" in adminsBody[0], false);
   } finally {
     await testServer.close();
-    database.close();
+    await closeTestDatabase(database);
   }
 });

@@ -11,7 +11,7 @@
    - [Express + TypeScript: Clean Architecture & SRP](#21-express--typescript-clean-architecture--srp)
    - [Authentication & Security (JWT + bcryptjs + RBAC)](#22-authentication--security-jwt--bcryptjs--rbac)
    - [File Upload & PDF Parsing (Multer + pdf-parse)](#23-file-upload--pdf-parsing-multer--pdf-parse)
-   - [Database & Data Integrity (SQLite)](#24-database--data-integrity-sqlite)
+   - [Database & Data Integrity (PostgreSQL)](#24-database--data-integrity-postgresql)
    - [Error Handling & Async Wrapper](#25-error-handling--async-wrapper)
 3. [AI Pipeline & Prompt Engineering (aiService.ts)](#3-ai-pipeline--prompt-engineering-aiservicets)
 4. [Frontend Architecture Deep Dive (client/)](#4-frontend-architecture-deep-dive-client)
@@ -69,23 +69,23 @@
 └───────┬──────────────────────────┬──────────────────────┘
         │                          │
         ▼                          ▼
-┌───────────────┐    ┌───────────────────────────────┐
-│   SQLite      │    │   Groq AI (LLaMA 3.3-70B)      │
-│  (better-sqlite3) │   │   via OpenAI SDK            │
-│               │    │   mock fallback when no API Key │
-│  - users       │    └───────────────────────────────┘
-│  - candidates  │                │
-│  - messages    │    ┌───────────▼───────────────────┐
-│  - notifications│    │   PDF Parser (pdf-parse)      │
-└───────────────┘    │   extracts text from PDFs      │
-                     └───────────────────────────────┘
+┌──────────────────────┐    ┌───────────────────────────────┐
+│   PostgreSQL         │    │   Groq AI (LLaMA 3.3-70B)      │
+│   (pg Pool)          │    │   via OpenAI SDK            │
+│                      │    │   mock fallback when no API Key │
+│  - users             │    └───────────────────────────────┘
+│  - candidates        │                │
+│  - messages          │    ┌───────────▼───────────────────┐
+│  - notifications     │    │   PDF Parser (pdf-parse)      │
+└──────────────────────┘    │   extracts text from PDFs      │
+                           └───────────────────────────────┘
 ```
 
 **Basic Candidate Flow:**
 1. Candidate registers → receives JWT Token
 2. Submits resume (text or PDF) → backend extracts PDF text (if applicable) → sends to Groq AI
 3. AI analyzes the resume and returns structured JSON (skills, experience, score, multilingual summary)
-4. Data saved to SQLite → notification sent to Admin
+4. Data saved to PostgreSQL → notification sent to Admin
 5. Admin sees the new candidate in the dashboard, can open Chat and communicate
 
 ---
@@ -103,7 +103,7 @@ Controllers (validate input, call Repositories/Services, send JSON)
    ↓
 Repositories (SQL queries only) / Services (complex business logic)
    ↓
-Database (SQLite) / External APIs (Groq AI, PDF Parse)
+Database (PostgreSQL) / External APIs (Groq AI, PDF Parse)
 ```
 
 #### 🧩 Routes — Featherweight
@@ -185,7 +185,7 @@ User sends { name, email, password, role }
   → validateRegisterBody() checks all fields exist and are valid
   → userRepository.getUserByEmail() — does the email already exist? (→ 409 Conflict)
   → bcrypt.hash(password, 10) — hash password with 10 Salt Rounds
-  → userRepository.createUser() — save new user to SQLite
+  → userRepository.createUser() — save new user to PostgreSQL
   → jwt.sign({ role }, secret, { subject: String(user.id), expiresIn: "7d" })
   → Response: { token, user: { id, name, email, role } }
 ```
@@ -207,15 +207,15 @@ sequenceDiagram
     participant Frontend
     participant AuthCtrl as AuthController
     participant UserRepo as UserRepository
-    participant SQLite
+    participant PostgreSQL
 
-    Note over User,SQLite: Registration Flow
+    Note over User,PostgreSQL: Registration Flow
     User->>Frontend: { name, email, password, role }
     Frontend->>AuthCtrl: POST /api/auth/register
     AuthCtrl->>AuthCtrl: validateRegisterBody()
     AuthCtrl->>UserRepo: getUserByEmail(email)
-    UserRepo->>SQLite: SELECT ... WHERE lower(email)=?
-    SQLite-->>UserRepo: user | undefined
+    UserRepo->>PostgreSQL: SELECT ... WHERE lower(email)=$1
+    PostgreSQL-->>UserRepo: user | undefined
     Alt Email exists
         UserRepo-->>AuthCtrl: user found
         AuthCtrl-->>Frontend: 409 "User already exists"
@@ -224,21 +224,21 @@ sequenceDiagram
         UserRepo-->>AuthCtrl: undefined
         AuthCtrl->>AuthCtrl: bcrypt.hash(password, 10)
         AuthCtrl->>UserRepo: createUser({ name, email, hashedPwd, role })
-        UserRepo->>SQLite: INSERT INTO users ...
-        SQLite-->>UserRepo: new user
+        UserRepo->>PostgreSQL: INSERT INTO users ... RETURNING ...
+        PostgreSQL-->>UserRepo: new user
         UserRepo-->>AuthCtrl: User object
         AuthCtrl->>AuthCtrl: jwt.sign({ role }, secret, { sub: user.id })
         AuthCtrl-->>Frontend: 201 { token, user }
         Frontend-->>User: Store token + user in localStorage
     end
 
-    Note over User,SQLite: Login Flow
+    Note over User,PostgreSQL: Login Flow
     User->>Frontend: { email, password }
     Frontend->>AuthCtrl: POST /api/auth/login
     AuthCtrl->>AuthCtrl: validateLoginBody()
     AuthCtrl->>UserRepo: getUserByEmail(email)
-    UserRepo->>SQLite: SELECT ... WHERE lower(email)=?
-    SQLite-->>UserRepo: user
+    UserRepo->>PostgreSQL: SELECT ... WHERE lower(email)=$1
+    PostgreSQL-->>UserRepo: user
     UserRepo-->>AuthCtrl: User object
     AuthCtrl->>AuthCtrl: bcrypt.compare(password, user.password)
     Alt Invalid password
@@ -263,8 +263,8 @@ const userId = getUserIdFromToken(token, jwtSecret);
 // → jwt.verify(token, jwtSecret) returns payload { sub: "1", role: "admin" }
 // → Validate that sub is a positive integer
 
-// 3. Look up user in database
-const user = userRepository.getUserById(userId);
+// 3. Look up user in database (async)
+const user = await userRepository.getUserById(userId);
 // → If not found → 401
 
 // 4. Attach user to Request for downstream handlers
@@ -324,7 +324,7 @@ sequenceDiagram
     participant AIService as AI Service (Groq)
     participant Groq
     participant CandidateRepo as CandidateRepository
-    participant SQLite
+    participant PostgreSQL
     participant NotifRepo as NotificationRepository
 
     Candidate->>Frontend: Select PDF file
@@ -347,14 +347,14 @@ sequenceDiagram
         AIService->>AIService: mockAnalysis()
     end
     AIService-->>CandidateCtrl: ResumeAnalysis object
-    CandidateCtrl->>CandidateRepo: upsertCandidate({ user_id, name, email, skills, ... })
-    CandidateRepo->>SQLite: SELECT existing (by user_id/email/name)
+    CandidateCtrl->>CandidateRepo: findOrCreateCandidate({ user_id, name, email, phone, linkedin, github })
+    CandidateRepo->>PostgreSQL: SELECT existing (by user_id/email/name)
     Alt Found & ownership OK
-        CandidateRepo->>SQLite: UPDATE candidates SET ...
+        CandidateRepo->>PostgreSQL: return existing candidate
     else Not found
-        CandidateRepo->>SQLite: INSERT INTO candidates ...
+        CandidateRepo->>PostgreSQL: INSERT INTO candidates ... RETURNING ...
     end
-    SQLite-->>CandidateRepo: Candidate
+    PostgreSQL-->>CandidateRepo: Candidate
     CandidateRepo-->>CandidateCtrl: Candidate
     CandidateCtrl->>NotifRepo: createNotification({ type: "candidate_application", target_role: "admin" })
     CandidateCtrl-->>Frontend: 201 { id, name, skills, score, summary, ... }
@@ -392,46 +392,70 @@ if (relativeFilePath.startsWith("..") || isAbsolute(relativeFilePath)) return nu
 
 ---
 
-### 2.4 Database & Data Integrity (SQLite)
+### 2.4 Database & Data Integrity (PostgreSQL)
 
-#### 🗃️ Four Core Tables
+#### 🗃️ Seven Core Tables
 
 #### 🔄 Database Schema Entity-Relationship Diagram (ERD)
 
 ```mermaid
 erDiagram
     users ||--o{ candidates : "user_id"
+    users ||--o{ sessions : "user_id"
     users ||--o{ messages : "sender_id"
     users ||--o{ messages : "receiver_id"
     users ||--o{ notifications : "user_id"
     users ||--o{ notifications : "sender_id"
+    candidates ||--o{ resumes : "candidate_id"
     candidates ||--o{ messages : "candidate_id"
     candidates ||--o{ notifications : "candidate_id"
+    resumes ||--o{ resume_analyses : "resume_id"
 
     users {
         int id PK
-        string name UK
-        string email UK
+        string name
+        string email
         string password
         string role "candidate | admin"
-        datetime created_at
+        timestamptz created_at
+    }
+
+    sessions {
+        int id PK
+        int user_id FK
+        string refresh_token_hash
+        timestamptz expires_at
+        int revoked "0|1"
+        timestamptz created_at
     }
 
     candidates {
         int id PK
         int user_id FK
-        string name UK
-        string email UK
+        string name
+        string email
         string phone
         string linkedin
         string github
+        timestamptz created_at
+    }
+
+    resumes {
+        int id PK
+        int candidate_id FK "ON DELETE CASCADE"
         string pdf_url
+        timestamptz uploaded_at
+    }
+
+    resume_analyses {
+        int id PK
+        int resume_id FK "ON DELETE CASCADE"
         string skills "JSON"
         string experience "JSON"
         string projects "JSON"
         string summary "JSON"
         int score "1-100"
-        datetime created_at
+        timestamptz created_at
     }
 
     messages {
@@ -441,7 +465,7 @@ erDiagram
         int candidate_id FK
         string content
         int is_read "0|1"
-        datetime created_at
+        timestamptz created_at
     }
 
     notifications {
@@ -454,81 +478,116 @@ erDiagram
         string title
         string content
         int is_read "0|1"
-        datetime created_at
+        timestamptz created_at
     }
 
     users_email_unique_idx: UNIQUE INDEX ON users(lower(email))
     candidates_email_unique_idx: UNIQUE INDEX ON candidates(lower(email)) WHERE email IS NOT NULL
-    candidates_name_unique_idx: UNIQUE INDEX ON candidates(lower(name))
+    candidates_user_id_idx: INDEX ON candidates(user_id)
+    resumes_candidate_id_idx: INDEX ON resumes(candidate_id)
+    resume_analyses_resume_id_idx: INDEX ON resume_analyses(resume_id)
     messages_candidate_created_idx: INDEX ON messages(candidate_id, created_at, id)
     notifications_user_unread_idx: INDEX ON notifications(user_id, is_read, created_at, id)
     notifications_role_unread_idx: INDEX ON notifications(target_role, is_read, created_at, id)
     notifications_candidate_idx: INDEX ON notifications(candidate_id, created_at, id)
+    sessions_user_id_idx: INDEX ON sessions(user_id, revoked, expires_at)
+    sessions_hash_idx: INDEX ON sessions(refresh_token_hash)
 ```
 
 **1. users**
 ```sql
 CREATE TABLE users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
+  email TEXT NOT NULL,
   password TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'candidate' CHECK (role IN ('candidate', 'admin')),
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
 **2. candidates — analyzed resume data**
 ```sql
 CREATE TABLE candidates (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id),
   name TEXT NOT NULL,
-  email TEXT UNIQUE,
+  email TEXT,
   phone TEXT,
-  linkedin TEXT, github TEXT,
+  linkedin TEXT,
+  github TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**3. resumes — uploaded PDF records**
+```sql
+CREATE TABLE resumes (
+  id SERIAL PRIMARY KEY,
+  candidate_id INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
   pdf_url TEXT,
+  uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**4. resume_analyses — AI extraction results**
+```sql
+CREATE TABLE resume_analyses (
+  id SERIAL PRIMARY KEY,
+  resume_id INTEGER NOT NULL REFERENCES resumes(id) ON DELETE CASCADE,
   skills TEXT,        -- JSON string
   experience TEXT,     -- JSON string
   projects TEXT,       -- JSON string
   summary TEXT,        -- JSON string (LocalizedSummary)
   score INTEGER CHECK (score IS NULL OR score BETWEEN 1 AND 100),
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
-**3. messages — chat messages**
+**5. messages — chat messages**
 ```sql
 CREATE TABLE messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   sender_id INTEGER NOT NULL REFERENCES users(id),
   receiver_id INTEGER NOT NULL REFERENCES users(id),
   candidate_id INTEGER NOT NULL REFERENCES candidates(id),
   content TEXT NOT NULL,
   is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
-**4. notifications**
+**6. notifications**
 ```sql
 CREATE TABLE notifications (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id),
-  target_role TEXT CHECK (target_role IN ('candidate', 'admin')),
+  target_role TEXT CHECK (target_role IS NULL OR target_role IN ('candidate', 'admin')),
   candidate_id INTEGER REFERENCES candidates(id) ON DELETE SET NULL,
   sender_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   type TEXT NOT NULL,  -- 'candidate_application' | 'message'
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**7. sessions — refresh token sessions**
+```sql
+CREATE TABLE sessions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  refresh_token_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked INTEGER NOT NULL DEFAULT 0 CHECK (revoked IN (0, 1)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
 #### 🗃️ Foreign Keys & Cascading Deletes
 
-**`PRAGMA foreign_keys = ON;`** — activated at database connection time. This ensures:
+**Foreign keys are enforced by default in PostgreSQL.** This ensures:
 
 - `candidates.user_id → users.id`: No candidate without a valid user
 - `messages.candidate_id → candidates.id`: No message referencing a non-existent candidate
@@ -540,29 +599,48 @@ CREATE TABLE notifications (
 In `candidateRepository.deleteCandidateWithRelatedRecords`:
 
 ```typescript
-const deleteCandidateWithRelatedRecords = database.transaction((id) => {
-  const candidate = getCandidateById(id);               // 1. Verify candidate exists
-  deleteMessagesByCandidateIdStatement.run(id);          // 2. Delete all associated messages
-  deleteNotificationsByCandidateIdStatement.run(id);     // 3. Delete all associated notifications
-  deleteCandidateStatement.run(id);                      // 4. Delete the candidate
-});
+const client = await database.connect();
+try {
+  await client.query("BEGIN");
+  // 1. Verify candidate exists (inside the transaction)
+  const { rows } = await client.query(`${candidatesWithAnalysisQuery} WHERE c.id = $1`, [id]);
+  const row = rows[0];
+  if (row === undefined) { await client.query("ROLLBACK"); return undefined; }
+  // 2. Delete all associated messages
+  await client.query("DELETE FROM messages WHERE candidate_id = $1", [id]);
+  // 3. Delete all associated notifications
+  await client.query("DELETE FROM notifications WHERE candidate_id = $1", [id]);
+  // 4. Delete the candidate (CASCADE handles resumes → resume_analyses)
+  const result = await client.query("DELETE FROM candidates WHERE id = $1", [id]);
+  await client.query("COMMIT");
+  return (result.rowCount ?? 0) > 0 ? mapToCandidateWithAnalysis(row) : undefined;
+} catch (error) {
+  await client.query("ROLLBACK").catch(() => undefined);
+  throw error;
+} finally {
+  client.release();
+}
 ```
 
-This uses `database.transaction()` to ensure **Atomicity** — either everything is deleted or nothing is.
+This uses an explicit `BEGIN`/`COMMIT`/`ROLLBACK` transaction on a dedicated pool client to ensure **Atomicity** — either everything is deleted or nothing is.
 
 #### 🗃️ Indexes for Query Performance
 
-Seven Indexes optimize the most frequent query patterns:
+Indexes optimize the most frequent query patterns:
 
 ```sql
--- Fast email lookup (case-insensitive)
+-- Fast email lookup (case-insensitive, expression index)
 CREATE UNIQUE INDEX users_email_unique_idx ON users (lower(email));
 
--- Prevent duplicate candidates by email
+-- Prevent duplicate candidates by email (partial index — NULLs allowed)
 CREATE UNIQUE INDEX candidates_email_unique_idx ON candidates (lower(email)) WHERE email IS NOT NULL;
 
--- Prevent duplicate candidates by name
-CREATE UNIQUE INDEX candidates_name_unique_idx ON candidates (lower(name));
+-- Fast candidate lookup by owner
+CREATE INDEX candidates_user_id_idx ON candidates (user_id);
+
+-- Fast joins from resumes and analyses
+CREATE INDEX resumes_candidate_id_idx ON resumes (candidate_id);
+CREATE INDEX resume_analyses_resume_id_idx ON resume_analyses (resume_id);
 
 -- Fast message retrieval by candidate
 CREATE INDEX messages_candidate_created_idx ON messages (candidate_id, created_at, id);
@@ -575,11 +653,15 @@ CREATE INDEX notifications_role_unread_idx ON notifications (target_role, is_rea
 
 -- Fast notification lookup by candidate
 CREATE INDEX notifications_candidate_idx ON notifications (candidate_id, created_at, id);
+
+-- Fast session lookup by user and by refresh-token hash
+CREATE INDEX sessions_user_id_idx ON sessions (user_id, revoked, expires_at);
+CREATE INDEX sessions_hash_idx ON sessions (refresh_token_hash);
 ```
 
-#### 🗃️ UPSERT Strategy & Anti-Duplication
+#### 🗃️ Find-or-Create Strategy & Anti-Duplication
 
-In `candidateRepository.upsertCandidate`:
+In `candidateRepository.findOrCreateCandidate`:
 
 1. **Look up existing candidate** with multi-criteria search (priority-ordered):
    - `user_id`: If the user already has a candidate → use it
@@ -591,20 +673,14 @@ In `candidateRepository.upsertCandidate`:
 
 #### 🗃️ Migration-Friendly Design
 
-`initializeDatabase` uses `CREATE TABLE IF NOT EXISTS` and never drops existing tables. Safe column additions are handled through `addMissing*Columns` functions that inspect existing columns via `PRAGMA table_info`:
+`initializeDatabase` is **async** and uses `CREATE TABLE IF NOT EXISTS` — it never drops existing tables. Safe column additions use PostgreSQL's `ADD COLUMN IF NOT EXISTS` syntax:
 
 ```typescript
-const existingColumns = new Set(
-  database.prepare("PRAGMA table_info(users)").all().map(c => c.name)
-);
-for (const column of columnsToAdd) {
-  if (!existingColumns.has(column.name)) {
-    database.exec(`ALTER TABLE users ADD COLUMN ${column.name} ${column.definition};`);
-  }
-}
+await database.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_read INTEGER NOT NULL DEFAULT 0");
+await database.query("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS candidate_id INTEGER");
 ```
 
-A deduplication pass (`deduplicateCandidates`) runs at startup to clean up any duplicates that may have existed before the UNIQUE indexes were added.
+Index creation is isolated per statement (`CREATE UNIQUE INDEX IF NOT EXISTS ... ON users (lower(email))`), so expression and partial indexes are created safely alongside existing data.
 
 ---
 
@@ -911,6 +987,7 @@ sequenceDiagram
     participant ChatCtrl as ChatController
     participant MsgRepo as MessageRepository
     participant NotifRepo as NotificationRepository
+    participant PostgreSQL
     participant NotifBell as NotificationBell (UI)
     participant useNotifs as useNotifications Hook
 
@@ -923,9 +1000,9 @@ sequenceDiagram
     ChatCtrl->>ChatCtrl: validateSendMessageBody()
     ChatCtrl->>MsgRepo: createMessage({ sender_id, receiver_id, candidate_id, content })
     ChatCtrl->>NotifRepo: createNotification({ type: "message", target_role: "admin" })
-    NotifRepo->>SQLite: INSERT INTO notifications ...
-    MsgRepo->>SQLite: INSERT INTO messages ...
-    SQLite-->>MsgRepo: saved message { id, is_read: 0 }
+    NotifRepo->>PostgreSQL: INSERT INTO notifications ... RETURNING ...
+    MsgRepo->>PostgreSQL: INSERT INTO messages ... RETURNING ...
+    PostgreSQL-->>MsgRepo: saved message { id, is_read: 0 }
     MsgRepo-->>ChatCtrl: Message
     ChatCtrl-->>ChatService: 201 { id, sender_id, content, is_read: 0, ... }
     ChatService-->>useChat: ChatMessage
@@ -938,8 +1015,8 @@ sequenceDiagram
         NotifBell->>ChatService: GET /api/notifications (with Bearer token)
         ChatService->>ChatCtrl: getUnreadNotifications()
         ChatCtrl->>NotifRepo: getUnreadNotificationsForUser(user)
-        NotifRepo->>SQLite: SELECT ... WHERE is_read=0 AND (user_id=? OR target_role='admin')
-        SQLite-->>NotifRepo: [ { type: "message", candidate_id, ... } ]
+        NotifRepo->>PostgreSQL: SELECT ... WHERE is_read=0 AND (user_id=$1 OR target_role='admin')
+        PostgreSQL-->>NotifRepo: [ { type: "message", candidate_id, ... } ]
         NotifRepo-->>ChatCtrl: Notification[]
         ChatCtrl-->>ChatService: 200 Notification[]
         ChatService-->>useNotifs: setNotifications(loaded)
@@ -953,14 +1030,14 @@ sequenceDiagram
     useNotifs->>ChatService: PATCH /api/notifications/{id}/read
     ChatService->>ChatCtrl: markOneAsRead
     ChatCtrl->>NotifRepo: markNotificationAsReadForUser(id, user)
-    NotifRepo->>SQLite: UPDATE notifications SET is_read=1 WHERE id=?
+    NotifRepo->>PostgreSQL: UPDATE notifications SET is_read=1 WHERE id=$1
 
     Admin->>ChatDrawer: openCandidateChat(candidate)
     ChatDrawer->>useChat: isOpen = true
     useChat->>ChatService: GET /api/chat/{candidate_id}
     ChatService->>ChatCtrl: getMessages
     ChatCtrl->>MsgRepo: markMessagesAsReadForUser(candidate_id, admin.id)
-    MsgRepo->>SQLite: UPDATE messages SET is_read=1 WHERE receiver_id=? AND is_read=0
+    MsgRepo->>PostgreSQL: UPDATE messages SET is_read=1 WHERE receiver_id=$1 AND is_read=0
     ChatCtrl->>MsgRepo: getMessagesByCandidateId(candidate_id)
     MsgRepo-->>ChatCtrl: Message[] (all is_read=1)
     ChatCtrl-->>ChatService: 200 Message[]
@@ -1272,19 +1349,19 @@ This ensures that even if the notification references a candidate not yet loaded
 
 ## 5. Interview Q&A Cheat Sheet: 10 Critical Questions
 
-### Q1: Why did you choose SQLite over PostgreSQL or MongoDB?
+### Q1: Why did you choose PostgreSQL?
 
 **Answer:**
 
-SQLite was chosen because:
+PostgreSQL was chosen because:
 
-1. **Zero configuration:** No separate database server needed. The `screener.db` file is auto-created.
-2. **Lightweight:** Perfect for the app's deployment model (Single Server with no horizontal scaling).
-3. **High speed:** `better-sqlite3` is a synchronous library that's faster than async database libraries for single-threaded use.
-4. **Single-user focus:** The SaaS is small-scale, not needing thousands of concurrent connections.
-5. **Zero cost:** No external database hosting fees.
+1. **Concurrency:** A connection-pooled `pg` Pool handles many concurrent users, unlike single-file embedded databases that serialize writes.
+2. **Rich data integrity:** Native foreign keys, cascading deletes, CHECK constraints, and expression/partial unique indexes (e.g. `lower(email)`) enforce case-insensitive uniqueness at the database level.
+3. **Async-first:** `pg` integrates naturally with the async architecture of Express controllers, repositories, and services.
+4. **Deployment flexibility:** Runs locally, in Docker, or on any managed provider via a single `DATABASE_URL` connection string.
+5. **Structured + flexible data:** JSON strings (skills, experience, summary) are stored in `TEXT` columns and parsed in the application layer.
 
-**The Trade-off:** If the app grows to thousands of concurrent users, migration to PostgreSQL with connection pooling would be needed. The current design (Repository Pattern) makes this migration straightforward since SQL is isolated in Repository files.
+**The Trade-off:** PostgreSQL requires a running database server (a `DATABASE_URL`), so setup is slightly heavier than an embedded file. The Repository Pattern keeps SQL isolated, so the persistence layer remains swappable.
 
 ### Q2: Why use polling instead of WebSockets for chat and notifications?
 
@@ -1303,8 +1380,8 @@ SQLite was chosen because:
 
 We use a multi-layered strategy:
 
-1. **Database level:** `UNIQUE INDEX` on `lower(email)` and `lower(name)`.
-2. **Repository level:** The `upsertCandidate` function searches for existing candidates with priority ordering:
+1. **Database level:** `UNIQUE INDEX` on `lower(email)` (users and candidates).
+2. **Repository level:** The `findOrCreateCandidate` function searches for existing candidates with priority ordering:
    - `user_id` (highest priority)
    - `email` (medium priority)
    - `name` (lowest priority)
@@ -1322,17 +1399,17 @@ Three layers of protection:
 
 This ensures **the app never crashes** due to external service issues.
 
-### Q5: Why store `skills`, `experience`, and `summary` as JSON strings in SQLite?
+### Q5: Why store `skills`, `experience`, and `summary` as JSON strings in PostgreSQL?
 
 **Answer:**
 
-1. **SQLite lacks native JSON column types** unlike PostgreSQL. Storing as TEXT and parsing in the application layer is the standard approach.
-2. **Flexibility:** Candidate skills, projects, and experience vary in structure and length. JSON strings provide flexibility without additional normalized tables.
-3. **Safe parsing at read time:** The `toCandidateResponse` function in `candidateResponse.ts` parses JSON with full type validation:
+1. **Flexibility:** Candidate skills, projects, and experience vary in structure and length. JSON strings stored in `TEXT` columns provide flexibility without extra normalized tables.
+2. **Application-layer validation:** The `toCandidateResponse` function in `candidateResponse.ts` parses JSON with full type validation:
    ```typescript
    skills: parseJsonArray(candidate.skills, (item): item is string => typeof item === "string"),
    ```
    If the JSON is invalid, an empty array `[]` is returned instead of crashing the app.
+3. **Easy upgrade path:** PostgreSQL also offers a native `JSONB` type, so the storage type can be changed later without touching the repository API.
 
 ### Q6: How does the system ensure candidates can only see their own profile?
 
@@ -1365,23 +1442,33 @@ RBAC with strict Data Isolation:
    }
    ```
 
-### Q7: Why use `database.transaction()` when deleting a candidate?
+### Q7: Why use a database transaction when deleting a candidate?
 
 **Answer:**
 
-For **Atomicity** — either everything is deleted or nothing is deleted:
+For **Atomicity** — either everything is deleted or nothing is deleted. With PostgreSQL we acquire a dedicated client from the `pg` Pool and issue explicit `BEGIN`/`COMMIT`/`ROLLBACK`:
 
 ```typescript
-const deleteCandidateWithRelatedRecords = database.transaction((id) => {
-  const candidate = getCandidateById(id);
-  deleteMessagesByCandidateIdStatement.run(id);      // Delete associated messages
-  deleteNotificationsByCandidateIdStatement.run(id); // Delete associated notifications
-  deleteCandidateStatement.run(id);                   // Delete the candidate
-  return candidate;
-});
+const client = await database.connect();
+try {
+  await client.query("BEGIN");
+  const { rows } = await client.query(`${candidatesWithAnalysisQuery} WHERE c.id = $1`, [id]);
+  const row = rows[0];
+  if (row === undefined) { await client.query("ROLLBACK"); return undefined; }
+  await client.query("DELETE FROM messages WHERE candidate_id = $1", [id]);       // Delete messages
+  await client.query("DELETE FROM notifications WHERE candidate_id = $1", [id]); // Delete notifications
+  const result = await client.query("DELETE FROM candidates WHERE id = $1", [id]); // Delete candidate
+  await client.query("COMMIT");
+  return (result.rowCount ?? 0) > 0 ? mapToCandidateWithAnalysis(row) : undefined;
+} catch (error) {
+  await client.query("ROLLBACK").catch(() => undefined);
+  throw error;
+} finally {
+  client.release();
+}
 ```
 
-Without a transaction, if the server crashed after step 2, some messages would be deleted while the candidate remained. The transaction guarantees that if any step fails, the database performs a full Rollback.
+Without a transaction, if the server crashed after deleting messages, some messages would be deleted while the candidate remained. The transaction guarantees that if any step fails, the database performs a full Rollback.
 
 ### Q8: Why use Dependency Injection instead of direct imports in Routes?
 

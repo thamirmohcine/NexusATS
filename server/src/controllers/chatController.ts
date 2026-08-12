@@ -18,19 +18,19 @@ export interface ChatController {
   sendMessage: (
     request: Request<Record<string, never>, Message | ErrorResponse, unknown>,
     response: Response<Message | ErrorResponse>,
-  ) => void;
+  ) => Promise<void>;
   getMessages: (
     request: Request<{ candidate_id: string }, Message[] | ErrorResponse, unknown>,
     response: Response<Message[] | ErrorResponse>,
-  ) => void;
+  ) => Promise<void>;
 }
 
-const canAccessCandidateChat = (
+const canAccessCandidateChat = async (
   user: User,
   candidateId: number,
   candidateRepository: CandidateRepository,
-): boolean => {
-  const candidate = candidateRepository.getCandidateById(candidateId);
+): Promise<boolean> => {
+  const candidate = await candidateRepository.getCandidateById(candidateId);
 
   if (candidate === undefined) return false;
 
@@ -41,7 +41,7 @@ export const createChatController = ({
   candidateRepository,
   chatService,
 }: CreateChatControllerOptions): ChatController => ({
-  sendMessage: (request, response): void => {
+  sendMessage: async (request, response): Promise<void> => {
     const user = getAuthenticatedUser(request);
 
     if (user === null) {
@@ -57,13 +57,17 @@ export const createChatController = ({
     }
 
     if (
-      !canAccessCandidateChat(user, validation.body.candidateId, candidateRepository)
+      !(await canAccessCandidateChat(
+        user,
+        validation.body.candidateId,
+        candidateRepository,
+      ))
     ) {
       response.status(404).json({ error: "Candidate not found" });
       return;
     }
 
-    const message = chatService.sendMessage({
+    const message = await chatService.sendMessage({
       senderId: user.id,
       senderName: user.name,
       senderRole: user.role,
@@ -80,7 +84,7 @@ export const createChatController = ({
     sendSuccess(response, message, 201);
   },
 
-  getMessages: (request, response): void => {
+  getMessages: async (request, response): Promise<void> => {
     const user = getAuthenticatedUser(request);
 
     if (user === null) {
@@ -95,11 +99,11 @@ export const createChatController = ({
       return;
     }
 
-    if (!canAccessCandidateChat(user, candidateId, candidateRepository)) {
+    if (!(await canAccessCandidateChat(user, candidateId, candidateRepository))) {
       response.status(404).json({ error: "Candidate not found" });
       return;
     }
 
-    sendSuccess(response, chatService.getMessages(user, candidateId));
+    sendSuccess(response, await chatService.getMessages(user, candidateId));
   },
 });

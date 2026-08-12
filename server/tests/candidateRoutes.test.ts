@@ -6,18 +6,19 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
-import Database from "better-sqlite3";
+import type { Pool } from "pg";
 import express from "express";
 
 import { createCandidateRepository } from "../src/candidateRepository.js";
 import type { CandidateResponse } from "../src/candidateResponse.js";
-import { initializeDatabase } from "../src/databaseSchema.js";
 import { createGlobalErrorHandler } from "../src/middleware/errorHandler.js";
 import { createLogger } from "../src/services/logger.js";
+import { createNotificationRepository } from "../src/notificationRepository.js";
 import type { ResumeAnalysis } from "../src/services/ai.js";
 import { createAuthRouter } from "../src/routes/auth.js";
 import { createCandidatesRouter } from "../src/routes/candidates.js";
 import { createUserRepository } from "../src/userRepository.js";
+import { closeTestDatabase, createTestDatabase } from "../src/__tests__/helpers/testDatabase.js";
 
 interface TestServer {
   baseUrl: string;
@@ -30,7 +31,7 @@ interface AuthenticatedTestUser {
 }
 
 interface TestContext {
-  database: Database.Database;
+  database: Pool;
   candidates: ReturnType<typeof createCandidateRepository>;
   server: TestServer;
   uploadsDirectory: string;
@@ -78,8 +79,8 @@ const createResumePdfBuffer = (): Buffer =>
  * bypassing the mock analysis endpoint. This gives us full control over
  * each candidate's email, name, and analysis data.
  */
-const seedCandidate = (
-  database: Database.Database,
+const seedCandidate = async (
+  database: Pool,
   opts: {
     user_id: number | null;
     name: string;
@@ -89,22 +90,22 @@ const seedCandidate = (
     score?: number;
     pdf_url?: string | null;
   },
-): { id: number; user_id: number | null; name: string } => {
+): Promise<{ id: number; user_id: number | null; name: string }> => {
   const repo = createCandidateRepository(database);
 
-  const candidate = repo.findOrCreateCandidate({
+  const candidate = await repo.findOrCreateCandidate({
     user_id: opts.user_id,
     name: opts.name,
     email: opts.email,
   });
 
-  const resume = repo.insertResume({
+  const resume = await repo.insertResume({
     candidate_id: candidate.id,
     pdf_url: opts.pdf_url ?? null,
   });
 
   if (resume !== undefined) {
-    repo.insertResumeAnalysis({
+    await repo.insertResumeAnalysis({
       resume_id: resume.id,
       skills: opts.skills ?? JSON.stringify(["TypeScript"]),
       experience: null,
@@ -116,21 +117,21 @@ const seedCandidate = (
 
   // If the user is a candidate and the candidate was unclaimed, claim it
   if (candidate.user_id === null && opts.user_id !== null) {
-    repo.updateCandidateUser(candidate.id, opts.user_id);
+    await repo.updateCandidateUser(candidate.id, opts.user_id);
   }
 
   return { id: candidate.id, user_id: candidate.user_id, name: candidate.name };
 };
 
 const startServer = async (): Promise<TestContext> => {
-  const database = new Database(":memory:");
+  const database = await createTestDatabase();
   const uploadsDirectory = await mkdtemp(
     join(tmpdir(), "candidate-route-uploads-"),
   );
-  initializeDatabase(database);
 
   const users = createUserRepository(database);
   const candidates = createCandidateRepository(database);
+  const notifications = createNotificationRepository(database);
   const app = express();
 
   app.use(express.json());
@@ -149,6 +150,7 @@ const startServer = async (): Promise<TestContext> => {
       candidateRepository: candidates,
       userRepository: users,
       analyzeResumeService: async () => analysis,
+      notificationRepository: notifications,
       uploadsDirectory,
     }),
   );
@@ -179,6 +181,7 @@ const startServer = async (): Promise<TestContext> => {
           });
         });
         await rm(uploadsDirectory, { force: true, recursive: true });
+        await closeTestDatabase(database);
       },
     },
   };
@@ -266,7 +269,7 @@ test("candidate routes return all candidates to admins and only owned candidates
     });
 
     // Seed candidates directly with unique emails
-    seedCandidate(database, {
+    await seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Candidate One Profile",
       email: "one-profile@example.com",
@@ -274,7 +277,7 @@ test("candidate routes return all candidates to admins and only owned candidates
       summary: "One summary.",
       score: 81,
     });
-    seedCandidate(database, {
+    await seedCandidate(database, {
       user_id: otherCandidateUser.id,
       name: "Candidate Two Profile",
       email: "two-profile@example.com",
@@ -301,7 +304,6 @@ test("candidate routes return all candidates to admins and only owned candidates
     );
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -329,7 +331,7 @@ test("candidate routes let candidates delete their own profile while admins can 
     });
 
     // Seed candidates directly
-    const ownedCandidate = seedCandidate(database, {
+    const ownedCandidate = await seedCandidate(database, {
       user_id: candidateUser.id,
       name: "Owned Profile",
       email: "owned-profile@example.com",
@@ -337,7 +339,7 @@ test("candidate routes let candidates delete their own profile while admins can 
       summary: "Owned summary.",
       score: 83,
     });
-    const otherCandidate = seedCandidate(database, {
+    const otherCandidate = await seedCandidate(database, {
       user_id: otherCandidateUser.id,
       name: "Other Profile",
       email: "other-profile@example.com",
@@ -360,7 +362,7 @@ test("candidate routes let candidates delete their own profile while admins can 
 
     assert.equal(forbiddenOtherDeleteResponse.status, 404);
     assert.deepEqual(forbiddenOtherDeleteBody, { error: "Candidate not found" });
-    assert.notEqual(candidates.getCandidateById(otherCandidate.id), undefined);
+    assert.notEqual(await candidates.getCandidateById(otherCandidate.id), undefined);
 
     const ownDeleteResponse = await fetch(
       `${server.baseUrl}/api/candidates/${ownedCandidate.id}`,
@@ -377,7 +379,7 @@ test("candidate routes let candidates delete their own profile while admins can 
     assert.deepEqual(ownDeleteBody, {
       message: "Candidate deleted successfully",
     });
-    assert.equal(candidates.getCandidateById(ownedCandidate.id), undefined);
+    assert.equal(await candidates.getCandidateById(ownedCandidate.id), undefined);
 
     const adminDeleteResponse = await fetch(
       `${server.baseUrl}/api/candidates/${otherCandidate.id}`,
@@ -390,10 +392,9 @@ test("candidate routes let candidates delete their own profile while admins can 
     );
 
     assert.equal(adminDeleteResponse.status, 200);
-    assert.equal(candidates.getCandidateById(otherCandidate.id), undefined);
+    assert.equal(await candidates.getCandidateById(otherCandidate.id), undefined);
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -443,16 +444,13 @@ test("candidate routes delete related messages notifications and uploaded PDF fi
     const candidateId = uploadBody.id as number;
     const pdfUrl = uploadBody.pdf_url as string;
 
-    database
-      .prepare(
-        "INSERT INTO messages (sender_id, receiver_id, candidate_id, content) VALUES (?, ?, ?, ?)",
-      )
-      .run(candidateUser.id, admin.id, candidateId, "Hello admin.");
-    database
-      .prepare(
-        "INSERT INTO notifications (user_id, target_role, candidate_id, sender_id, type, title, content) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(
+    await database.query(
+      "INSERT INTO messages (sender_id, receiver_id, candidate_id, content) VALUES ($1, $2, $3, $4)",
+      [candidateUser.id, admin.id, candidateId, "Hello admin."],
+    );
+    await database.query(
+      "INSERT INTO notifications (user_id, target_role, candidate_id, sender_id, type, title, content) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+      [
         null,
         "admin",
         candidateId,
@@ -460,7 +458,8 @@ test("candidate routes delete related messages notifications and uploaded PDF fi
         "candidate_application",
         "New candidate application",
         "Cleanup Profile submitted a resume.",
-      );
+      ],
+    );
 
     const deleteResponse = await fetch(
       `${server.baseUrl}/api/candidates/${candidateId}`,
@@ -477,21 +476,27 @@ test("candidate routes delete related messages notifications and uploaded PDF fi
     assert.deepEqual(deleteBody, {
       message: "Candidate deleted successfully",
     });
-    assert.equal(candidates.getCandidateById(candidateId), undefined);
+    assert.equal(await candidates.getCandidateById(candidateId), undefined);
     assert.equal(
-      database
-        .prepare("SELECT COUNT(*) AS count FROM messages WHERE candidate_id = ?")
-        .get(candidateId)
-        ?.count,
+      Number(
+        (
+          await database.query<{ count: string }>(
+            "SELECT COUNT(*)::int AS count FROM messages WHERE candidate_id = $1",
+            [candidateId],
+          )
+        ).rows[0]?.count,
+      ),
       0,
     );
     assert.equal(
-      database
-        .prepare(
-          "SELECT COUNT(*) AS count FROM notifications WHERE candidate_id = ?",
-        )
-        .get(candidateId)
-        ?.count,
+      Number(
+        (
+          await database.query<{ count: string }>(
+            "SELECT COUNT(*)::int AS count FROM notifications WHERE candidate_id = $1",
+            [candidateId],
+          )
+        ).rows[0]?.count,
+      ),
       0,
     );
 
@@ -504,7 +509,6 @@ test("candidate routes delete related messages notifications and uploaded PDF fi
     }
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -544,17 +548,17 @@ test("candidate routes attach analyzed profiles to the candidate user and create
     assert.equal(body.user_id, candidateUser.id);
 
     // Should still be 1 candidate with 2 resumes
-    assert.equal(candidates.getCandidates().length, 1);
+    assert.equal((await candidates.getCandidates()).length, 1);
 
     // Verify 2 resumes exist
-    const resumeCount = database
-      .prepare("SELECT COUNT(*) AS count FROM resumes WHERE candidate_id = ?")
-      .get(body.id as number);
+    const resumeCount = await database.query<{ count: string }>(
+      "SELECT COUNT(*)::int AS count FROM resumes WHERE candidate_id = $1",
+      [body.id as number],
+    );
 
-    assert.equal(resumeCount?.count, 2);
+    assert.equal(Number(resumeCount.rows[0]?.count), 2);
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -576,7 +580,7 @@ test("candidate routes return conflict when an analyzed profile belongs to anoth
     });
 
     // Other user claims the email first via seed (uses analysis.email)
-    seedCandidate(database, {
+    await seedCandidate(database, {
       user_id: otherCandidateUser.id,
       name: "Existing Candidate",
       email: analysis.email,
@@ -599,7 +603,6 @@ test("candidate routes return conflict when an analyzed profile belongs to anoth
     });
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -636,10 +639,9 @@ test("candidate routes upload a PDF resume for a candidate user", async () => {
     assert.equal(body.name, "Updated Candidate");
     assert.equal(typeof body.pdf_url, "string");
     assert.match(String(body.pdf_url), /\/uploads\/\d+-resume\.pdf$/);
-    assert.equal(candidates.getCandidatesByUserId(candidateUser.id).length, 1);
+    assert.equal((await candidates.getCandidatesByUserId(candidateUser.id)).length, 1);
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -661,7 +663,7 @@ test("candidate routes return conflict when an uploaded PDF profile belongs to a
     });
 
     // Other user claims the analysis email first
-    seedCandidate(database, {
+    await seedCandidate(database, {
       user_id: otherCandidateUser.id,
       name: "Existing PDF Candidate",
       email: analysis.email,
@@ -693,7 +695,6 @@ test("candidate routes return conflict when an uploaded PDF profile belongs to a
     });
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -709,7 +710,7 @@ test("candidate routes upload a PDF resume by linking an existing same-email pro
     });
 
     // Create a legacy unclaimed candidate with the same email as the analysis fixture
-    seedCandidate(database, {
+    await seedCandidate(database, {
       user_id: null,
       name: "Legacy PDF Candidate",
       email: analysis.email,
@@ -745,10 +746,9 @@ test("candidate routes upload a PDF resume by linking an existing same-email pro
     assert.equal(body.name, "Legacy PDF Candidate"); // Profile name is immutable
 
     // 1 candidate total — the legacy one was found and reused
-    assert.equal(candidates.getCandidates().length, 1);
+    assert.equal((await candidates.getCandidates()).length, 1);
   } finally {
     await server.close();
-    database.close();
   }
 });
 
@@ -763,6 +763,5 @@ test("candidate routes reject unauthenticated candidate requests", async () => {
     assert.deepEqual(body, { error: "Authorization token is required" });
   } finally {
     await server.close();
-    database.close();
   }
 });

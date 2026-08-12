@@ -65,11 +65,11 @@ export const validateSendMessageBody = (
 // ── Service Factory ────────────────────────────────────────────────────
 
 export interface ChatService {
-  sendMessage(input: SendMessageInput): Message | undefined;
+  sendMessage(input: SendMessageInput): Promise<Message | undefined>;
   getMessages(
     user: User,
     candidateId: number,
-  ): Message[];
+  ): Promise<Message[]>;
 }
 
 interface CreateChatServiceOptions {
@@ -83,12 +83,12 @@ export const createChatService = ({
   messageRepository,
   notificationService,
 }: CreateChatServiceOptions): ChatService => ({
-  sendMessage: (input: SendMessageInput): Message | undefined => {
-    if (userRepository.getUserById(input.receiverId) === undefined) {
+  sendMessage: async (input: SendMessageInput): Promise<Message | undefined> => {
+    if ((await userRepository.getUserById(input.receiverId)) === undefined) {
       throw new NotFoundError("Receiver not found");
     }
 
-    const message = messageRepository.createMessage({
+    const message = await messageRepository.createMessage({
       sender_id: input.senderId,
       receiver_id: input.receiverId,
       candidate_id: input.candidateId,
@@ -99,7 +99,7 @@ export const createChatService = ({
       return undefined;
     }
 
-    notificationService.notifyMessageSent(
+    await notificationService.notifyMessageSent(
       input.senderName,
       input.senderRole,
       input.senderId,
@@ -110,11 +110,11 @@ export const createChatService = ({
     return message;
   },
 
-  getMessages: (
+  getMessages: async (
     user: User,
     candidateId: number,
-  ): Message[] => {
-    messageRepository.markMessagesAsReadForUser(candidateId, user.id);
+  ): Promise<Message[]> => {
+    await messageRepository.markMessagesAsReadForUser(candidateId, user.id);
 
     return messageRepository.getMessagesByCandidateId(candidateId);
   },
